@@ -1,0 +1,2229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Co-Study | 完美专注空间</title>
+    <style>
+        /* --- 1. 核心变量系统 --- */
+        :root {
+            --bg-body: #F5F2EB;
+            --bg-card: #FFFFFF;
+            --bg-input: #F7F7F7;
+            --text-main: #2D3436;
+            --text-sec: #636E72;
+            --border: #EFEFEF;
+            
+            --accent: #E0B08B; 
+            --accent-glow: rgba(224, 176, 139, 0.3);
+
+            /* 优先级颜色*/
+            --prio-high: #FF7675;
+            --prio-med: #FDCB6E;
+            --prio-low: #55EFC4;
+
+            --shadow-card: 0 8px 30px rgba(0,0,0,0.04);
+            --shadow-btn: 6px 6px 12px #d1d1d1, -6px -6px 12px #ffffff;
+            --shadow-btn-inset: inset 4px 4px 8px #d1d1d1, inset -4px -4px 8px #ffffff;
+
+            --radius-card: 24px;
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #18191A;
+            --bg-card: #242526;
+            --bg-input: #3A3B3C;
+            --text-main: #E4E6EB;
+            --text-sec: #B0B3B8;
+            --border: #3E4042;
+            --shadow-card: 0 8px 30px rgba(0,0,0,0.3);
+            --shadow-btn: 5px 5px 10px #121212, -5px -5px 10px #303030;
+            --shadow-btn-inset: inset 4px 4px 8px #121212, inset -4px -4px 8px #303030;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .room-meta {
+            padding: 0 40px 10px 40px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .room-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
+            border-radius: 999px;
+            padding: 6px 16px;
+            font-size: 0.85rem;
+            box-shadow: var(--shadow-card);
+            border: 1px solid var(--border);
+        }
+        .room-pill strong { font-size: 0.95rem; }
+        .presence-names {
+            font-size: 0.85rem;
+            color: var(--text-sec);
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .join-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            backdrop-filter: blur(6px);
+            transition: opacity 0.3s ease;
+        }
+        .join-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .join-card {
+            width: min(420px, 90vw);
+            background: var(--bg-card);
+            border-radius: 28px;
+            padding: 36px;
+            box-shadow: var(--shadow-card);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+        .join-icon { font-size: 2.5rem; }
+        .join-sub { color: var(--text-sec); font-size: 0.9rem; line-height: 1.5; }
+        .join-label { font-weight: 600; font-size: 0.85rem; }
+        .join-input {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 12px 16px;
+            background: var(--bg-input);
+            font-size: 0.95rem;
+            transition: border 0.2s, box-shadow 0.2s;
+        }
+        .join-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: var(--bg-card);
+        }
+        .join-submit {
+            border: none;
+            border-radius: 16px;
+            background: var(--accent);
+            color: #fff;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: var(--shadow-card);
+            margin-top: 6px;
+        }
+        .join-error { min-height: 18px; font-size: 0.85rem; color: var(--prio-high); }
+
+        /* --- Header --- */
+        header { padding: 15px 40px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .logo { font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        .logo span { color: var(--accent); }
+        .header-tools { display: flex; align-items: center; gap: 20px; }
+
+        .color-palette { display: flex; gap: 8px; background: var(--bg-card); padding: 6px 10px; border-radius: 20px; box-shadow: var(--shadow-card); }
+        .color-dot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
+        .color-dot:hover { transform: scale(1.2); }
+        .color-dot.active { border-color: var(--text-main); transform: scale(1.1); }
+
+        .icon-btn { background: var(--bg-card); border: none; width: 40px; height: 40px; border-radius: 12px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-card); transition: 0.2s; font-size: 1.1rem; }
+        .icon-btn:hover { transform: translateY(-2px); color: var(--accent); }
+
+        .lang-switch { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.9rem; background: var(--bg-card); padding: 4px 12px; border-radius: 20px; box-shadow: var(--shadow-card); cursor: pointer; user-select: none; }
+        .lang-switch span { opacity: 0.4; transition: 0.2s; }
+        .lang-switch span.active { opacity: 1; color: var(--accent); }
+
+        /* --- Layout --- */
+        main { flex: 1; display: grid; grid-template-columns: 320px 1fr 320px; gap: 24px; padding: 10px 40px 30px 40px; overflow: hidden; }
+        .card { background: var(--bg-card); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 24px; display: flex; flex-direction: column; height: 100%; overflow-y: auto; border: 1px solid var(--border); transition: 0.3s; scrollbar-width: thin; scrollbar-color: rgba(224,176,139,0.55) transparent; }
+        .card::-webkit-scrollbar { width: 8px; }
+        .card::-webkit-scrollbar-track { background: transparent; border-radius: 999px; }
+        .card::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(224,176,139,0.95), rgba(224,176,139,0.6)); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .card::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(224,176,139,1), rgba(224,176,139,0.75)); }
+
+        .user-panel, .status-control { width: 100%; background: var(--bg-input); border-radius: 20px; border: 1px solid var(--border); padding: 18px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.02); }
+        .user-panel { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+        .user-panel-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: 0.95rem; }
+        .user-count { color: var(--text-sec); font-size: 0.85rem; }
+        .user-list { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 8px; }
+        .user-item { display: flex; align-items: flex-start; gap: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+        .user-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .user-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
+        .user-dot.online { background: #1dd1a1; box-shadow: 0 0 0 3px rgba(29,209,161,0.15); }
+        .user-dot.offline { background: #b2bec3; box-shadow: 0 0 0 3px rgba(178,190,195,0.2); }
+        .user-body { flex: 1; min-width: 0; }
+        .user-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .user-name { font-weight: 600; font-size: 0.9rem; }
+        .user-self { font-size: 0.75rem; color: var(--accent); background: rgba(224,176,139,0.15); padding: 2px 8px; border-radius: 999px; }
+        .user-status-text { margin-top: 2px; font-size: 0.8rem; color: var(--text-sec); word-break: break-word; }
+        .user-empty { font-size: 0.85rem; color: var(--text-sec); text-align: center; padding: 12px 0; }
+
+        .status-control { display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; }
+        .status-label { font-size: 0.9rem; font-weight: 600; }
+        .status-presets { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .status-btn { border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; background: var(--bg-card); font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s ease; color: var(--text-main); font-weight: 500; }
+        .status-btn.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .status-btn:hover { transform: translateY(-1px); }
+        .status-input { width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; font-size: 0.9rem; background: var(--bg-card); transition: border 0.2s, box-shadow 0.2s; color: var(--text-main); }
+        .status-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .status-options { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 0.85rem; color: var(--text-sec); }
+        .status-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+        .status-toggle input { accent-color: var(--accent); }
+        .status-preview { font-size: 0.82rem; color: var(--text-main); padding: 8px 12px; background: var(--bg-input); border-radius: 12px; border: 1px dashed var(--border); font-weight: 500; }
+
+        /* --- Todo List --- */
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .card-title { font-size: 1.1rem; font-weight: 700; }
+        .progress-track { height: 6px; background: var(--bg-input); border-radius: 3px; margin-bottom: 20px; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 3px; transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
+        .todo-input-wrapper { background: var(--bg-input); border-radius: 16px; padding: 5px; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; border: 1px solid transparent; transition: 0.3s; }
+        .todo-input-wrapper:focus-within { background: var(--bg-card); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .todo-input { flex: 1; border: none; background: transparent; padding: 10px; color: var(--text-main); font-size: 0.9rem; }
+        .btn-add { width: 32px; height: 32px; border-radius: 10px; border: none; background: var(--accent); color: white; cursor: pointer; flex-shrink: 0; }
+
+        .todo-list { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 4px; min-height: 0; }
+        
+        .todo-item {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 12px;
+            cursor: grab; position: relative; transition: all 0.2s ease;
+        }
+        .todo-item:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+        .todo-item.dragging { 
+            opacity: 0.6; 
+            background: var(--bg-input); 
+            border: 2px dashed var(--accent);
+            transform: scale(1.05) rotate(2deg);
+            z-index: 10;
+        }
+
+        .prio-line { width: 4px; height: 20px; border-radius: 2px; background: #ddd; }
+        .check-circle { width: 20px; height: 20px; border: 2px solid var(--text-sec); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: 0.2s; }
+        .todo-text { font-size: 0.95rem; color: var(--text-main); transition: 0.3s; }
+
+        .todo-item.done .check-circle { background: var(--accent); border-color: var(--accent); }
+        .todo-item.done .check-circle::after { content: '✓'; color: white; font-size: 12px; }
+        .todo-item.done .todo-text { text-decoration: line-through; color: var(--text-sec); opacity: 0.6; }
+
+        /* --- Timer & Video --- */
+        .center-col { display: flex; flex-direction: column; gap: 20px; height: 100%; overflow: hidden; }
+        .video-box { flex: 1; min-height: 280px; background: #000; border-radius: var(--radius-card); position: relative; display: flex; gap: 2px; overflow: hidden; padding: 2px; }
+        .cam-feed { flex: 1; background: #1a1a1a; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; position: relative; overflow: hidden; }
+        .cam-feed video { width: 100%; height: 100%; object-fit: cover; border-radius: 20px; display: none; }
+        .remote-grid { flex: 1; width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); grid-auto-rows: minmax(180px, 1fr); gap: 12px; padding: 15px; box-sizing: border-box; align-content: stretch; justify-items: center; }
+        .remote-tile { width: 100%; height: 100%; border-radius: 18px; overflow: hidden; position: relative; background: #0a0a0a; box-shadow: 0 12px 25px rgba(0,0,0,0.4); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .remote-tile:hover { transform: translateY(-3px); box-shadow: 0 15px 35px rgba(0,0,0,0.6); }
+        .remote-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .remote-tile-name { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); padding: 6px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .cam-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 1rem; opacity: 0.85; }
+        .cam-controls { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 5; }
+        .cam-btn { border: none; border-radius: 999px; padding: 10px 20px; font-size: 0.9rem; cursor: pointer; background: rgba(0,0,0,0.6); color: #fff; backdrop-filter: blur(6px); }
+        .cam-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status-badge { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; display: flex; align-items: center; gap: 6px; }
+        .status-dot { width: 6px; height: 6px; background: #4cd137; border-radius: 50%; animation: pulse 2s infinite; }
+        .status-dot.warn { background: #FDCB6E; }
+        .status-dot.neutral { background: #636E72; }
+        .ai-status { position: absolute; top: 45px; left: 15px; font-size: 0.75rem; opacity: 0.8; }
+        .remote-name { position: absolute; top: 15px; left: 15px; font-size: 0.85rem; background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 999px; }
+        .remote-status { position: absolute; bottom: 15px; left: 15px; right: 15px; background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 12px; font-size: 0.8rem; text-align: center; }
+        .video-box.collapsed { background: #050505; }
+        .video-box.collapsed #remote-cam { min-height: 60px; flex: 0; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.2); }
+        .video-box.collapsed #remote-grid { display: none; }
+        .video-box.collapsed #remote-placeholder { display: flex; position: relative; }
+        .video-box-collapsed-banner { position: absolute; left: 12px; right: 12px; top: 12px; bottom: 90px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #fff; font-size: 0.95rem; background: rgba(0,0,0,0.45); backdrop-filter: blur(4px); border-radius: 18px; z-index: 4; pointer-events: none; padding: 0 20px; text-align: center; }
+        .video-box-collapsed-banner[hidden] { display: none; }
+
+        .timer-box { background: var(--bg-card); padding: 25px; border-radius: var(--radius-card); box-shadow: var(--shadow-card); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
+        .timer-tabs { display: flex; gap: 5px; background: var(--bg-input); padding: 4px; border-radius: 20px; margin-bottom: 15px; }
+        .timer-tab { padding: 6px 16px; border-radius: 16px; font-size: 0.85rem; color: var(--text-sec); cursor: pointer; transition: 0.3s; }
+        .timer-tab.active { background: var(--bg-card); color: var(--accent); font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .time-display { font-size: 4.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; margin: 5px 0 15px 0; color: var(--text-main); }
+
+        .timer-main-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 30px; margin: 15px 0; }
+        .timer-main-row .time-display { margin: 0; }
+        .timer-main-row .focus-summary { width: auto; flex: 0 1 auto; margin: 0; min-width: 200px; }
+        .timer-main-row .focus-summary-text { flex-direction: row; align-items: baseline; gap: 8px; }
+        .timer-main-row .focus-summary strong { font-size: 2rem; }
+
+        .timer-config-bar { display: flex; align-items: center; gap: 15px; background: var(--bg-input); padding: 8px 20px; border-radius: 20px; margin-bottom: 10px; font-size: 0.85rem; color: var(--text-sec); }
+        .config-item { display: flex; align-items: center; gap: 8px; }
+        .config-input { width: 40px; text-align: center; border: none; background: var(--bg-card); border-radius: 8px; padding: 4px 0; color: var(--text-main); font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+        .timer-controls { display: flex; gap: 30px; align-items: center; margin-top: 10px; }
+        .btn-ctrl { width: 64px; height: 64px; border-radius: 50%; border: none; background: var(--bg-card); color: var(--text-main); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-btn); transition: all 0.2s ease; }
+        .btn-ctrl:active { box-shadow: var(--shadow-btn-inset); transform: scale(0.95); }
+        .btn-ctrl.main { color: var(--accent); font-size: 1.8rem; }
+
+        .focus-summary { width: 100%; margin-top: 15px; background: var(--bg-input); border-radius: 18px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-main); }
+        .focus-summary-text { display: flex; flex-direction: column; gap: 4px; }
+        .focus-summary strong { font-size: 1.3rem; letter-spacing: 0.5px; }
+        .focus-reset-btn { border: none; border-radius: 999px; padding: 6px 16px; font-size: 0.85rem; cursor: pointer; background: rgba(0,0,0,0.08); color: var(--text-main); font-weight: 600; transition: background 0.2s, color 0.2s; }
+        .focus-reset-btn:hover { background: rgba(0,0,0,0.15); }
+
+        /* --- Chat & Ambient --- */
+        .chat-container { flex: 1; display: flex; flex-direction: column; margin-bottom: 20px; overflow: hidden; }
+        .chat-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 5px; }
+        .msg { padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; max-width: 85%; line-height: 1.4; }
+        .msg.l { background: var(--bg-input); align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg.r { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg-author { font-size: 0.75rem; opacity: 0.7; margin-bottom: 4px; display: block; }
+        .msg.system { align-self: center; background: transparent; color: var(--text-sec); font-size: 0.8rem; }
+
+        .chat-input-area { position: relative; margin-top: 10px; background: var(--bg-input); border-radius: 24px; display: flex; align-items: center; padding: 6px; }
+        .chat-input { flex: 1; border: none; background: transparent; padding: 8px 12px; font-size: 0.9rem; color: var(--text-main); min-width: 0; }
+        .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-send { width: 36px; height: 36px; background: var(--accent); border: none; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: transform 0.2s; }
+        .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-send:hover { transform: rotate(-10deg) scale(1.1); }
+
+        .ambient-control { margin-top: 12px; display: flex; justify-content: flex-end; position: relative; }
+        .ambient-btn { border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; background: var(--bg-card); font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-card); color: var(--text-main); font-weight: 500; }
+        .ambient-btn:hover { background: var(--bg-input); }
+        .ambient-popover { position: absolute; bottom: 110%; right: 0; width: 240px; background: var(--bg-card); border-radius: 18px; padding: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); border: 1px solid var(--border); z-index: 10; }
+        .ambient-popover[hidden] { display: none; }
+        .ambient-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.85rem; font-weight: 600; margin-bottom: 10px; }
+        .ambient-status-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-sec); }
+        .ambient-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow-y: auto; }
+        .ambient-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+        .ambient-list li:hover { background: var(--bg-input); }
+        .ambient-list li.active { background: rgba(224,176,139,0.12); color: var(--accent); }
+        .ambient-off { color: var(--prio-high); }
+        .ambient-volume { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 0.78rem; }
+        .ambient-volume input { width: 100%; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @media (max-width: 1024px) {
+            main { grid-template-columns: 1fr; overflow-y: visible; display: flex; flex-direction: column; }
+            body { height: auto; }
+            .card { height: auto; }
+            .user-panel, .status-control { margin-bottom: 16px; }
+        }
+        @media (max-width: 640px) {
+            header { flex-direction: column; gap: 12px; }
+            main { padding: 10px 20px 20px; }
+            .status-presets { flex-direction: column; align-items: stretch; }
+            .status-options { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .ambient-control { justify-content: center; }
+            .ambient-popover { position: fixed; bottom: 10px; right: 10px; width: calc(100% - 20px); max-width: 360px; }
+            .timer-main-row { flex-direction: column; gap: 15px; }
+            .timer-main-row .time-display { font-size: 3.5rem; }
+            .timer-main-row .focus-summary { width: 100%; min-width: auto; }
+            .timer-main-row .focus-summary-text { flex-direction: column; align-items: flex-start; gap: 4px; }
+            .timer-main-row .focus-summary strong { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="join-overlay" id="join-overlay">
+    <form class="join-card" id="join-form">
+        <div class="join-icon">📚</div>
+        <h2 data-lang="joinTitle">Join the co-study space</h2>
+        <p class="join-sub" data-lang="joinSubtitle">Enter your nickname and room code to start focusing together.</p>
+        <label class="join-label" for="join-name" data-lang="joinName">Your nickname</label>
+        <input type="text" id="join-name" class="join-input" maxlength="20" data-lang-placeholder="joinNamePlaceholder" placeholder="Name shown to others">
+        <label class="join-label" for="join-room" data-lang="joinRoom">Room code</label>
+        <input type="text" id="join-room" class="join-input" maxlength="10" data-lang-placeholder="joinRoomPlaceholder" placeholder="e.g. ABC123">
+        <div class="join-error" id="join-error"></div>
+        <button class="join-submit" type="submit" data-lang="joinButton">Enter room</button>
+    </form>
+</div>
+
+<header>
+    <div class="logo"><span>?</span> Co-Study</div>
+    <div class="header-tools">
+        <div class="color-palette">
+            <div class="color-dot active" style="background:#E0B08B" onclick="setTheme('#E0B08B', this)"></div>
+            <div class="color-dot" style="background:#81ECEC" onclick="setTheme('#81ECEC', this)"></div>
+            <div class="color-dot" style="background:#A29BFE" onclick="setTheme('#A29BFE', this)"></div>
+            <div class="color-dot" style="background:#FAB1A0" onclick="setTheme('#FAB1A0', this)"></div>
+            <div class="color-dot" style="background:#74B9FF" onclick="setTheme('#74B9FF', this)"></div>
+        </div>
+        <div class="lang-switch" onclick="toggleLang()">
+            <span class="active" id="lang-cn">CN</span> / <span id="lang-en">EN</span>
+        </div>
+        <button class="icon-btn" onclick="toggleDark()">🌙</button>
+        <button class="icon-btn" onclick="shareRoom()" style="background:var(--accent); color:white;">🔗</button>
+    </div>
+</header>
+<div class="room-meta">
+    <div class="room-pill" id="room-pill">
+        <span data-lang="roomLabel">Room</span>
+        <strong id="room-code-val">---</strong>
+    </div>
+    <div class="room-pill" id="presence-pill">
+        <span data-lang="onlineLabel">Online</span>
+        <strong id="presence-count">0</strong>
+    </div>
+    <div class="presence-names" id="presence-names">Waiting for friends to join...</div>
+</div>
+
+<main>
+    <div class="card">
+        <div class="user-panel">
+            <div class="user-panel-header">
+                <span data-lang="userListTitle">房间成员</span>
+                <span class="user-count">(<span id="user-list-count">0</span>)</span>
+            </div>
+            <div class="user-list" id="user-list"></div>
+        </div>
+        <div class="status-control">
+            <label class="status-label" data-lang="myStatus">我的状态</label>
+            <div class="status-presets">
+                <button class="status-btn" type="button" data-status="meal">🍜 <span data-lang="statusMeal">吃饭中</span></button>
+                <button class="status-btn" type="button" data-status="away">🚶 <span data-lang="statusAway">暂时离开</span></button>
+                <button class="status-btn" type="button" data-status="studying">📖 <span data-lang="statusStudying">学习中</span></button>
+                <button class="status-btn" type="button" data-status="working">💼 <span data-lang="statusWorking">工作中</span></button>
+            </div>
+            <input type="text" id="status-custom" class="status-input" maxlength="20" data-lang-placeholder="statusCustomPlaceholder" placeholder="自定义状态...">
+            <div class="status-options">
+                <label class="status-toggle">
+                    <input type="checkbox" id="status-auto-sync">
+                    <span data-lang="statusAutoSync">🔄 跟随计时器</span>
+                </label>
+                <label class="status-toggle">
+                    <input type="checkbox" id="status-share" checked>
+                    <span data-lang="statusShare">🔒 与房间共享</span>
+                </label>
+            </div>
+            <div class="status-preview" id="status-preview">--</div>
+        </div>
+        <div class="card-header">
+            <div class="card-title" data-lang="todoTitle">To-Do List</div>
+            <div class="card-sub"><span id="done-cnt">0</span>/<span id="total-cnt">0</span></div>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="prog-bar"></div></div>
+
+        <div class="todo-input-wrapper">
+            <input type="text" class="todo-input" id="new-task" data-lang-placeholder="todoPlaceholder" placeholder="Add task...">
+            <button class="btn-add" onclick="addTask()">+</button>
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:15px; padding-left:5px;">
+            <div class="color-dot active" style="width:16px;height:16px;background:var(--prio-high)" onclick="setPrio(3, this)"></div>
+            <div class="color-dot" style="width:16px;height:16px;background:var(--prio-med)" onclick="setPrio(2, this)"></div>
+            <div class="color-dot" style="width:16px;height:16px;background:var(--prio-low)" onclick="setPrio(1, this)"></div>
+        </div>
+        <div class="todo-list" id="todo-list"></div>
+    </div>
+
+    <div class="center-col">
+        <div class="video-box">
+            <div class="video-box-collapsed-banner" id="video-collapse-banner" hidden>📹 <span data-lang="videoCollapsedBanner">暂无视频流</span></div>
+            <div class="cam-feed" id="local-cam">
+                <div class="status-badge"><div class="status-dot" id="ai-dot"></div><span data-lang="aiMonitor">AI Focus Monitor</span></div>
+                <div class="ai-status" id="ai-status-text">AI 准备就绪</div>
+                <video id="local-video" autoplay muted playsinline></video>
+                <div class="cam-placeholder" data-lang="camMe">My Camera</div>
+                <div class="cam-controls">
+                    <button class="cam-btn" id="camera-toggle">开启摄像头</button>
+                    <button class="cam-btn" id="screen-toggle" style="display:none;">屏幕共享(测试)</button>
+                </div>
+            </div>
+            <div class="cam-feed" id="remote-cam">
+                <div class="remote-name" id="remote-name" data-lang="camPeer">Peer Camera</div>
+                <div class="remote-grid" id="remote-grid"></div>
+                <div class="cam-placeholder" id="remote-placeholder" data-lang="remoteWaiting">Waiting for your buddy to enable camera</div>
+                <div class="remote-status" id="remote-status"></div>
+            </div>
+        </div>
+
+        <div class="timer-box">
+            <div class="timer-tabs">
+                <div class="timer-tab active" id="tab-focus" data-lang="focusMode">Focus Mode</div>
+                <div class="timer-tab" id="tab-break" data-lang="breakMode">Break Mode</div>
+            </div>
+
+            <div class="timer-main-row">
+                <div class="time-display" id="timer-disp">25:00</div>
+                <div class="focus-summary">
+                    <div class="focus-summary-text">
+                        <span data-lang="focusTodayLabel">今日专注</span>
+                        <strong id="focus-total">00:00</strong>
+                    </div>
+                    <button type="button" class="focus-reset-btn" id="focus-reset-btn" data-lang="focusReset">重置</button>
+                </div>
+            </div>
+
+            <div class="timer-config-bar">
+                <div class="config-item">
+                    <span data-lang="timerSet">Focus</span>:
+                    <input type="number" id="cfg-f" value="25" class="config-input"> m
+                </div>
+                <div style="width:1px; height:15px; background:#ccc; margin:0 5px;"></div>
+                <div class="config-item">
+                    <span data-lang="timerBreak">Break</span>:
+                    <input type="number" id="cfg-b" value="5" class="config-input"> m
+                </div>
+            </div>
+
+            <div class="timer-controls">
+                <button class="btn-ctrl" onclick="resetTimer()">↻</button>
+                <button class="btn-ctrl main" id="btn-toggle" onclick="toggleTimer()">▶</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><div class="card-title" data-lang="chatTitle">Chat Room</div></div>
+        <div class="chat-container">
+            <div class="chat-msgs" id="chat-msgs"></div>
+            <form class="chat-input-area" id="chat-form">
+                <input type="text" class="chat-input" id="chat-input" data-lang-placeholder="chatPlaceholder" placeholder="Type a message..." disabled>
+                <button class="btn-send" id="chat-send" type="submit" disabled>➤</button>
+            </form>
+        </div>
+        <div class="ambient-control">
+            <button id="ambient-toggle" class="ambient-btn" type="button">🎵 <span data-lang="ambientSound">环境音</span> ▼</button>
+            <div id="ambient-popover" class="ambient-popover" hidden>
+                <div class="ambient-header">
+                    <span data-lang="ambientTitle">选择环境音</span>
+                    <label class="ambient-status-toggle">
+                        <input type="checkbox" id="ambient-status-share" checked>
+                        <span data-lang="ambientShowStatus">同步到状态</span>
+                    </label>
+                </div>
+                <ul class="ambient-list" id="ambient-list">
+                    <li data-sound="rain"><span>🌧️</span> <span data-lang="soundRain">雨声</span></li>
+                    <li data-sound="forest"><span>🌲</span> <span data-lang="soundForest">森林</span></li>
+                    <li data-sound="fire"><span>🔥</span> <span data-lang="soundFire">篝火</span></li>
+                    <li data-sound="cafe"><span>☕</span> <span data-lang="soundCafe">咖啡馆</span></li>
+                    <li data-sound="ocean"><span>🌊</span> <span data-lang="soundOcean">海浪</span></li>
+                    <li data-sound="none" class="ambient-off"><span>✖️</span> <span data-lang="soundNone">关闭</span></li>
+                </ul>
+                <label class="ambient-volume">
+                    <span data-lang="ambientVolume">音量</span>
+                    <input type="range" id="ambient-volume" min="0" max="1" step="0.05" value="0.5">
+                </label>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    // --- 1. 主题与配色 ---
+    function setTheme(color, el) {
+        document.documentElement.style.setProperty('--accent', color);
+        document.documentElement.style.setProperty('--accent-glow', color + '4D');
+        document.querySelectorAll('.color-palette .color-dot').forEach(d => d.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    let isDark = false;
+    function toggleDark() {
+        isDark = !isDark;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    }
+
+    const langDict = JSON.parse('{"cn": {"todoTitle": "\u5f85\u529e\u6e05\u5355", "chatTitle": "\u804a\u5929\u5ba4", "noiseTitle": "\u73af\u5883\u97f3", "camMe": "\u6211\u7684\u955c\u5934", "camPeer": "\u540c\u4f34\u955c\u5934", "aiMonitor": "AI \u667a\u80fd\u76d1\u7763", "focusMode": "\u4e13\u6ce8\u6a21\u5f0f", "breakMode": "\u4f11\u606f\u6a21\u5f0f", "todoPlaceholder": "\u6dfb\u52a0\u5f85\u529e...", "chatPlaceholder": "\u8f93\u5165\u6d88\u606f...", "timerSet": "\u4e13\u6ce8", "timerBreak": "\u4f11\u606f", "noiseRain": "\u96e8\u58f0", "noiseForest": "\u68ee\u6797", "noiseFire": "\u7bdd\u706b", "noiseCafe": "\u5496\u5561\u9986", "joinTitle": "\u52a0\u5165\u5171\u540c\u5b66\u4e60\u7a7a\u95f4", "joinSubtitle": "\u8f93\u5165\u60a8\u7684\u6635\u79f0\u548c\u623f\u95f4\u4ee3\u7801\uff0c\u5f00\u59cb\u96c6\u4e2d\u6ce8\u610f\u529b\u3002", "joinName": "\u4f60\u7684\u6635\u79f0", "joinNamePlaceholder": "\u5411\u4ed6\u4eba\u663e\u793a\u7684\u540d\u5b57", "joinRoom": "\u623f\u95f4\u4ee3\u7801", "joinRoomPlaceholder": "\u4f8b\u5982 ABC123", "joinButton": "\u8fdb\u5165\u623f\u95f4", "roomLabel": "\u623f\u95f4", "onlineLabel": "\u5728\u7ebf", "presenceEmpty": "\u7b49\u5f85\u5c0f\u4f19\u4f34\u52a0\u5165...", "chatEmpty": "\u804a\u5929\u5185\u5bb9\u5c06\u5728\u8fd9\u91cc\u663e\u793a", "shareSuccess": "\u623f\u95f4\u94fe\u63a5\u5df2\u590d\u5236\uff01", "shareFallback": "\u590d\u5236\u6b64\u94fe\u63a5\u5e76\u5206\u4eab", "disconnectMsg": "\u8fde\u63a5\u4e22\u5931\uff0c\u6b63\u5728\u5c1d\u8bd5\u91cd\u65b0\u8fde\u63a5...", "joinNameError": "\u8bf7\u8f93\u5165\u6635\u79f0", "serviceError": "\u5b9e\u65f6\u670d\u52a1\u4e0d\u53ef\u7528", "connectError": "\u8fde\u63a5\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5", "joinFailed": "\u65e0\u6cd5\u52a0\u5165\uff0c\u8bf7\u91cd\u8bd5", "remoteWaiting": "\u7b49\u5f85\u540c\u4f34\u5f00\u542f\u6444\u50cf\u5934", "remoteOffline": "\u5bf9\u65b9\u6444\u50cf\u5934\u5df2\u5173\u95ed", "cameraToggleOn": "\u5f00\u542f\u6444\u50cf\u5934", "cameraToggleOff": "\u5173\u95ed\u6444\u50cf\u5934", "cameraToggleStarting": "\u6b63\u5728\u5f00\u542f...", "cameraError": "\u65e0\u6cd5\u8bbf\u95ee\u6444\u50cf\u5934", "aiReady": "AI \u51c6\u5907\u5c31\u7eea", "aiFocused": "\u72b6\u6001\uff1a\u4e13\u6ce8", "aiAway": "\u72b6\u6001\uff1a\u53ef\u80fd\u79bb\u5e2d", "aiNeedCamera": "\u5f00\u542f\u6444\u50cf\u5934\u4ee5\u542f\u7528 AI \u76d1\u7763", "aiUnsupported": "AI \u529f\u80fd\u6682\u4e0d\u652f\u6301\u5f53\u524d\u6d4f\u89c8\u5668", "userListTitle": "\u623f\u95f4\u6210\u5458", "myStatus": "\u6211\u7684\u72b6\u6001", "statusFocus": "\u4e13\u6ce8\u4e2d", "statusBreak": "\u4f11\u606f\u4e2d", "statusStudying": "\u5b66\u4e60\u4e2d", "statusWorking": "\u5de5\u4f5c\u4e2d", "statusMeal": "\u5403\u996d\u4e2d", "statusAway": "\u6682\u65f6\u79bb\u5f00", "statusAutoSync": "\ud83d\udd04 \u8ddf\u968f\u8ba1\u65f6\u5668", "statusShare": "\ud83d\udd12 \u4e0e\u623f\u95f4\u5171\u4eab", "statusCustomPlaceholder": "\u81ea\u5b9a\u4e49\u72b6\u6001...", "ambientSound": "\u73af\u5883\u97f3", "ambientTitle": "\u9009\u62e9\u73af\u5883\u97f3", "ambientShowStatus": "\u540c\u6b65\u5230\u72b6\u6001", "ambientVolume": "\u97f3\u91cf", "soundRain": "\u96e8\u58f0", "soundForest": "\u68ee\u6797", "soundFire": "\u7bdd\u706b", "soundCafe": "\u5496\u5561\u9986", "soundOcean": "\u6d77\u6d6a", "soundNone": "\u5173\u95ed", "soundListening": "\u8046\u542c", "videoCollapsedBanner": "\u6682\u65e0\u89c6\u9891\u6d41", "statusHidden": "\u672a\u5206\u4eab", "userJoined": "\u52a0\u5165\u4e86\u623f\u95f4", "userLeft": "\u79bb\u5f00\u4e86\u623f\u95f4", "focusTodayLabel": "\u4eca\u65e5\u4e13\u6ce8", "focusReset": "\u91cd\u7f6e"}, "en": {"todoTitle": "To-Do List", "chatTitle": "Chat Room", "noiseTitle": "Ambience", "camMe": "My Camera", "camPeer": "Peer Camera", "aiMonitor": "AI Focus Monitor", "focusMode": "Focus Mode", "breakMode": "Break Mode", "todoPlaceholder": "Add task...", "chatPlaceholder": "Type a message...", "timerSet": "Focus", "timerBreak": "Break", "noiseRain": "Rain", "noiseForest": "Forest", "noiseFire": "Fire", "noiseCafe": "Cafe", "joinTitle": "Join the co-study space", "joinSubtitle": "Enter your nickname and room code to start focusing together.", "joinName": "Your nickname", "joinNamePlaceholder": "Name shown to others", "joinRoom": "Room code", "joinRoomPlaceholder": "e.g. ABC123", "joinButton": "Enter room", "roomLabel": "Room", "onlineLabel": "Online", "presenceEmpty": "Waiting for friends to join...", "chatEmpty": "Messages will appear here", "shareSuccess": "Room link copied!", "shareFallback": "Copy this link and share it", "disconnectMsg": "Connection lost, attempting to reconnect...", "joinNameError": "Please enter a nickname", "serviceError": "Realtime service is unavailable", "connectError": "Connection failed, try again soon", "joinFailed": "Unable to join, please try again", "remoteWaiting": "Waiting for your buddy to enable camera", "remoteOffline": "Peer camera is offline", "cameraToggleOn": "Enable camera", "cameraToggleOff": "Disable camera", "cameraToggleStarting": "Starting...", "cameraError": "Unable to access the camera", "aiReady": "AI ready", "aiFocused": "Status: Focused", "aiAway": "Status: Possibly away", "aiNeedCamera": "Turn on the camera to enable AI monitoring", "aiUnsupported": "AI requires a newer browser", "userListTitle": "Room Members", "myStatus": "My Status", "statusFocus": "Focusing", "statusBreak": "On break", "statusStudying": "Studying", "statusWorking": "Working", "statusMeal": "Meal break", "statusAway": "Away", "statusAutoSync": "\ud83d\udd04 Auto sync with timer", "statusShare": "\ud83d\udd12 Share with room", "statusCustomPlaceholder": "Custom status...", "ambientSound": "Ambient", "ambientTitle": "Choose ambient sound", "ambientShowStatus": "Show in status", "ambientVolume": "Volume", "soundRain": "Rain", "soundForest": "Forest", "soundFire": "Fire", "soundCafe": "Cafe", "soundOcean": "Ocean", "soundNone": "Off", "soundListening": "Listening to", "videoCollapsedBanner": "No video stream", "statusHidden": "Not shared", "userJoined": "joined the room", "userLeft": "left the room", "focusTodayLabel": "Today\'s Focus", "focusReset": "Reset"}}');
+    let curLang = 'cn';
+
+    const todoList = document.getElementById('todo-list');
+    const chatMsgs = document.getElementById('chat-msgs');
+    const chatInput = document.getElementById('chat-input');
+    const chatSendBtn = document.getElementById('chat-send');
+    const chatForm = document.getElementById('chat-form');
+    const roomCodeVal = document.getElementById('room-code-val');
+    const presenceCountEl = document.getElementById('presence-count');
+    const presenceNamesEl = document.getElementById('presence-names');
+    const joinOverlay = document.getElementById('join-overlay');
+    const joinForm = document.getElementById('join-form');
+    const joinNameInput = document.getElementById('join-name');
+    const joinRoomInput = document.getElementById('join-room');
+    const joinError = document.getElementById('join-error');
+    const localVideo = document.getElementById('local-video');
+    const remoteGrid = document.getElementById('remote-grid');
+    const cameraToggleBtn = document.getElementById('camera-toggle');
+    const screenToggleBtn = document.getElementById('screen-toggle');
+    const remotePlaceholder = document.getElementById('remote-placeholder');
+    const remoteStatusEl = document.getElementById('remote-status');
+    const remoteNameLabel = document.getElementById('remote-name');
+    const aiStatusEl = document.getElementById('ai-status-text');
+    const aiDot = document.getElementById('ai-dot');
+    const userListEl = document.getElementById('user-list');
+    const userListCountEl = document.getElementById('user-list-count');
+    const statusCustomInput = document.getElementById('status-custom');
+    const statusAutoSyncToggle = document.getElementById('status-auto-sync');
+    const statusShareToggle = document.getElementById('status-share');
+    const statusPresetButtons = document.querySelectorAll('.status-btn');
+    const statusPreviewEl = document.getElementById('status-preview');
+    const ambientToggleBtn = document.getElementById('ambient-toggle');
+    const ambientPopover = document.getElementById('ambient-popover');
+    const ambientListEl = document.getElementById('ambient-list');
+    const ambientVolumeInput = document.getElementById('ambient-volume');
+    const ambientStatusShareToggle = document.getElementById('ambient-status-share');
+    const videoBoxEl = document.querySelector('.video-box');
+    const videoCollapseBanner = document.getElementById('video-collapse-banner');
+
+    let socket = null;
+    let username = '';
+    let roomId = '';
+    let presenceCount = 0;
+    let presenceCache = [];
+    let participantsMap = new Map();
+    const peerConnections = new Map();
+    const remoteCameraStates = new Map();
+    const remoteVideoSlots = new Map();
+    const pendingIceCandidates = new Map();
+    const STUN_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+    let localStream = null;
+    let cameraEnabled = false;
+    let aiMonitorTimer = null;
+    let aiDetector = null;
+    const STATUS_STORAGE_KEY = 'coStudyStatusState';
+    const AMBIENT_STORAGE_KEY = 'coStudyAmbientState';
+    const STATUS_PRESET_MAP = { meal: 'statusMeal', away: 'statusAway', studying: 'statusStudying', working: 'statusWorking' };
+    const statusState = { manualText: '', manualPreset: null, autoSync: false, isShared: true, lastUpdated: null };
+    const ambientSoundState = { type: null, enabled: false, volume: 0.5, showInStatus: true, audio: null, cache: {} };
+    const AMBIENT_SOUNDS = {
+        rain: { src: '/audio/rain.mp3', labelKey: 'soundRain', icon: '🌧️' },
+        forest: { src: '/audio/forest.mp3', labelKey: 'soundForest', icon: '🌲' },
+        fire: { src: '/audio/chimney-fire.wav', labelKey: 'soundFire', icon: '🔥' },
+        cafe: { src: '/audio/cafe.wav', labelKey: 'soundCafe', icon: '☕' },
+        ocean: { src: '/audio/waves.wav', labelKey: 'soundOcean', icon: '🌊' }
+    };
+    const TIMER_NOTIFICATION_SOUNDS = {
+        focusEnd: new Audio('/audio/work-end.mp3'),
+        breakEnd: new Audio('/audio/break-end.mp3')
+    };
+    let collapseRemoteTimeout = null;
+    let timerRunning = false;
+    let statusBroadcastTimer = null;
+
+    const FOCUS_STATS_KEY = 'coStudyFocusStats';
+    const focusTotalEl = document.getElementById('focus-total');
+    const focusResetBtn = document.getElementById('focus-reset-btn');
+    let focusStats = { date: null, totalSeconds: 0 };
+    let focusStatsResetTimer = null;
+
+    const DEBUG = true;
+    function debugLog(category, message, data) {
+        if (!DEBUG) return;
+        const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+        console.log(`[${timestamp}] [${category}]`, message, data || '');
+    }
+
+    function applyLanguage() {
+        document.getElementById('lang-cn').className = curLang === 'cn' ? 'active' : '';
+        document.getElementById('lang-en').className = curLang === 'en' ? 'active' : '';
+        document.querySelectorAll('[data-lang]').forEach(el => {
+            const key = el.dataset.lang;
+            if (langDict[curLang][key]) el.textContent = langDict[curLang][key];
+        });
+        document.querySelectorAll('[data-lang-placeholder]').forEach(el => {
+            const key = el.dataset.langPlaceholder;
+            if (langDict[curLang][key]) el.placeholder = langDict[curLang][key];
+        });
+        updateRemotePlaceholder();
+        const hasRemoteBuddy = hasRemoteBuddyOnline();
+        if (!remoteVideoSlots.size && remoteStatusEl) {
+            remoteStatusEl.textContent = hasRemoteBuddy ? langDict[curLang].remoteOffline : '';
+        }
+        updateCameraToggleLabel();
+        if (!cameraEnabled) {
+            aiStatusEl.textContent = aiDetector ? langDict[curLang].aiNeedCamera : langDict[curLang].aiUnsupported;
+        }
+        updateRemoteNameLabel();
+        updateRoomBadge();
+        updatePresenceList();
+        const placeholder = chatMsgs.querySelector('[data-placeholder]');
+        if (placeholder) placeholder.textContent = langDict[curLang].chatEmpty;
+        applyStatusLanguage();
+        // Re-render system messages with current language
+        updateChatSystemMessages();
+    }
+
+    function updateChatSystemMessages() {
+        if (!chatMsgs) return;
+        const systemMessages = chatMsgs.querySelectorAll('.msg.system');
+        systemMessages.forEach(bubble => {
+            const messageData = bubble.__messageData;
+            if (messageData && messageData.action && messageData.username) {
+                const actionKey = messageData.action === 'join' ? 'userJoined' : 'userLeft';
+                bubble.textContent = `${messageData.username} ${langDict[curLang][actionKey]}`;
+            }
+        });
+    }
+
+    function toggleLang() {
+        curLang = curLang === 'cn' ? 'en' : 'cn';
+        applyLanguage();
+    }
+
+    // --- Status & Ambient Helpers ---
+    function getSelfLabel() {
+        return curLang === 'cn' ? '我' : 'Me';
+    }
+
+    function getPresetLabel(preset) {
+        const langKey = STATUS_PRESET_MAP[preset];
+        if (!langKey) return '';
+        return langDict[curLang][langKey] || '';
+    }
+
+    function updateStatusPresetUI(activePreset) {
+        if (!statusPresetButtons || typeof statusPresetButtons.forEach !== 'function') return;
+        statusPresetButtons.forEach(btn => {
+            const target = btn.dataset.status;
+            btn.classList.toggle('active', !!activePreset && target === activePreset);
+        });
+    }
+
+    function setStatusPreset(preset) {
+        if (!STATUS_PRESET_MAP[preset]) return;
+        statusState.manualPreset = preset;
+        statusState.manualText = getPresetLabel(preset) || '';
+        if (statusCustomInput) statusCustomInput.value = statusState.manualText;
+        updateStatusPresetUI(preset);
+        refreshStatusState();
+    }
+
+    function updateStatusPreview() {
+        if (!statusPreviewEl) return;
+        if (!statusState.isShared) {
+            statusPreviewEl.textContent = langDict[curLang].statusHidden || '--';
+            return;
+        }
+        const text = buildStatusText();
+        // 如果没有任何状态内容，就不显示任何东西（空字符串），而不是显示 '--'
+        statusPreviewEl.textContent = text || '';
+    }
+
+    function getTimerStatusText() {
+        if (!statusState.autoSync || !timerRunning) return '';
+        const key = mode === 'focus' ? 'statusFocus' : 'statusBreak';
+        return langDict[curLang][key] || '';
+    }
+
+    function getAmbientStatusText() {
+        if (!ambientSoundState.showInStatus || !ambientSoundState.type) return '';
+        const descriptor = langDict[curLang].soundListening || '';
+        const meta = AMBIENT_SOUNDS[ambientSoundState.type];
+        const labelKey = meta && meta.labelKey;
+        const label = (labelKey && langDict[curLang][labelKey]) || ambientSoundState.type;
+        return descriptor ? descriptor + ' ' + label : label;
+    }
+
+    function buildStatusText() {
+        const parts = [];
+        const seen = new Set();
+        const addPart = (raw) => {
+            const normalized = (raw || '').trim();
+            if (!normalized || seen.has(normalized)) return;
+            seen.add(normalized);
+            parts.push(normalized);
+        };
+        addPart(statusState.manualText);
+        addPart(getTimerStatusText());
+        addPart(getAmbientStatusText());
+        return parts.join(' · ');
+    }
+
+    function buildStatusPayload() {
+        const payloadText = buildStatusText();
+        const visible = statusState.isShared && !!payloadText;
+        return {
+            text: visible ? payloadText : '',
+            visible,
+            manual: statusState.manualText || '',
+            manualPreset: statusState.manualPreset,
+            autoSync: !!statusState.autoSync,
+            ambientType: ambientSoundState.showInStatus && ambientSoundState.type ? ambientSoundState.type : null,
+            timerMode: statusState.autoSync && timerRunning ? mode : null,
+            updatedAt: Date.now()
+        };
+    }
+
+    function refreshStatusState(options = {}) {
+        const broadcast = options.broadcast !== false;
+        updateStatusPreview();
+        saveStatusState();
+        if (broadcast) scheduleStatusBroadcast();
+    }
+
+    function saveStatusState() {
+        try {
+            localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify({
+                manualText: statusState.manualText,
+                manualPreset: statusState.manualPreset,
+                autoSync: statusState.autoSync,
+                isShared: statusState.isShared
+            }));
+        } catch (err) {
+            debugLog('STORAGE', 'Status save failed', err.message);
+        }
+    }
+
+    function loadStatusState() {
+        let saved = null;
+        try {
+            saved = JSON.parse(localStorage.getItem(STATUS_STORAGE_KEY) || '{}');
+        } catch (err) {
+            debugLog('STORAGE', 'Status load failed', err.message);
+        }
+        if (saved) {
+            statusState.manualText = saved.manualText || '';
+            statusState.manualPreset = saved.manualPreset || null;
+            statusState.autoSync = !!saved.autoSync;
+            statusState.isShared = saved.isShared !== false;
+        }
+        if (statusCustomInput) statusCustomInput.value = statusState.manualText;
+        if (statusAutoSyncToggle) statusAutoSyncToggle.checked = statusState.autoSync;
+        if (statusShareToggle) statusShareToggle.checked = statusState.isShared;
+        updateStatusPresetUI(statusState.manualPreset);
+        updateStatusPreview();
+    }
+
+    function applyStatusLanguage() {
+        if (statusState.manualPreset && STATUS_PRESET_MAP[statusState.manualPreset]) {
+            statusState.manualText = getPresetLabel(statusState.manualPreset);
+            if (statusCustomInput) statusCustomInput.value = statusState.manualText;
+        }
+        refreshStatusState();
+        renderUserList();
+    }
+
+    function scheduleStatusBroadcast() {
+        if (!socket || !roomId) return;
+        if (statusBroadcastTimer) clearTimeout(statusBroadcastTimer);
+        statusBroadcastTimer = setTimeout(() => {
+            statusBroadcastTimer = null;
+            broadcastStatus();
+        }, 350);
+    }
+
+    function broadcastStatus() {
+        if (!socket || !roomId) return;
+        const payload = buildStatusPayload();
+        socket.emit('user-status', { status: payload }, (ack = {}) => {
+            if (ack && ack.ok) {
+                statusState.lastUpdated = payload.updatedAt;
+            }
+        });
+    }
+
+    function renderUserList() {
+        if (!userListEl) return;
+        const list = Array.isArray(presenceCache) ? presenceCache : [];
+        userListEl.innerHTML = '';
+        if (userListCountEl) userListCountEl.textContent = String(list.length || 0);
+        if (!list.length) {
+            const empty = document.createElement('div');
+            empty.className = 'user-empty';
+            empty.textContent = langDict[curLang].presenceEmpty;
+            userListEl.appendChild(empty);
+            return;
+        }
+        const selfId = socket && socket.id;
+        list.forEach(person => {
+            const record = participantsMap.get(person.id) || person;
+            const item = document.createElement('div');
+            item.className = 'user-item';
+            const dot = document.createElement('span');
+            dot.className = 'user-dot online';
+            item.appendChild(dot);
+            const body = document.createElement('div');
+            body.className = 'user-body';
+            const nameRow = document.createElement('div');
+            nameRow.className = 'user-name-row';
+            const nameEl = document.createElement('span');
+            nameEl.className = 'user-name';
+            nameEl.textContent = record.name || 'Guest';
+            nameRow.appendChild(nameEl);
+            if (selfId && record.id === selfId) {
+                const tag = document.createElement('span');
+                tag.className = 'user-self';
+                tag.textContent = getSelfLabel();
+                nameRow.appendChild(tag);
+            }
+            body.appendChild(nameRow);
+            const statusLine = document.createElement('div');
+            statusLine.className = 'user-status-text';
+            if (record.status && record.status.visible === false) {
+                statusLine.textContent = langDict[curLang].statusHidden;
+            } else {
+                const text = record.status && record.status.text ? record.status.text : '';
+                statusLine.textContent = text || '--';
+            }
+            body.appendChild(statusLine);
+            item.appendChild(body);
+            userListEl.appendChild(item);
+        });
+    }
+
+    function saveAmbientState() {
+        try {
+            localStorage.setItem(AMBIENT_STORAGE_KEY, JSON.stringify({
+                type: ambientSoundState.type,
+                enabled: ambientSoundState.enabled,
+                volume: ambientSoundState.volume,
+                showInStatus: ambientSoundState.showInStatus
+            }));
+        } catch (err) {
+            debugLog('STORAGE', 'Ambient save failed', err.message);
+        }
+    }
+
+    function loadAmbientState() {
+        let saved = null;
+        try {
+            saved = JSON.parse(localStorage.getItem(AMBIENT_STORAGE_KEY) || '{}');
+        } catch (err) {
+            debugLog('STORAGE', 'Ambient load failed', err.message);
+        }
+        if (saved) {
+            ambientSoundState.type = saved.type || null;
+            ambientSoundState.volume = typeof saved.volume === 'number' ? saved.volume : 0.5;
+            ambientSoundState.showInStatus = saved.showInStatus !== false;
+        }
+        if (ambientVolumeInput && typeof ambientSoundState.volume === 'number') {
+            ambientVolumeInput.value = ambientSoundState.volume;
+        }
+        if (ambientStatusShareToggle) ambientStatusShareToggle.checked = ambientSoundState.showInStatus;
+        const selectedType = ambientSoundState.type || (ambientSoundState.enabled ? ambientSoundState.type : 'none');
+        updateAmbientListUI(selectedType);
+        if (saved && saved.enabled && ambientSoundState.type) {
+            selectAmbientSound(ambientSoundState.type, { skipSave: true, autoplay: true });
+        } else {
+            stopAmbientSound();
+            refreshStatusState({ broadcast: false });
+        }
+    }
+
+    function updateAmbientListUI(selected) {
+        if (!ambientListEl) return;
+        ambientListEl.querySelectorAll('li').forEach(li => {
+            li.classList.toggle('active', li.dataset.sound === selected);
+        });
+    }
+
+    function stopAmbientSound() {
+        if (ambientSoundState.audio) {
+            try { ambientSoundState.audio.pause(); } catch (_) {}
+            try { ambientSoundState.audio.currentTime = 0; } catch (_) {}
+        }
+        ambientSoundState.audio = null;
+        ambientSoundState.enabled = false;
+    }
+
+    function selectAmbientSound(type, options = {}) {
+        const skipSave = options.skipSave || false;
+        const autoplay = options.autoplay !== false;
+        if (!type || type === 'none') {
+            stopAmbientSound();
+            ambientSoundState.type = null;
+            updateAmbientListUI('none');
+            if (!skipSave) saveAmbientState();
+            refreshStatusState();
+            return;
+        }
+        const sound = AMBIENT_SOUNDS[type];
+        if (!sound) {
+            stopAmbientSound();
+            ambientSoundState.type = null;
+            updateAmbientListUI('none');
+            refreshStatusState();
+            return;
+        }
+        ambientSoundState.type = type;
+        let audio = ambientSoundState.cache[type];
+        if (!audio) {
+            audio = new Audio(sound.src);
+            audio.loop = true;
+            audio.preload = 'auto';
+            audio.crossOrigin = 'anonymous';
+            ambientSoundState.cache[type] = audio;
+        }
+        if (ambientSoundState.audio && ambientSoundState.audio !== audio) {
+            try { ambientSoundState.audio.pause(); } catch (_) {}
+        }
+        ambientSoundState.audio = audio;
+        audio.volume = ambientSoundState.volume;
+        if (autoplay) {
+            audio.currentTime = 0;
+            audio.play().then(() => {
+                ambientSoundState.enabled = true;
+                updateAmbientListUI(type);
+                if (!skipSave) saveAmbientState();
+                refreshStatusState();
+            }).catch(err => {
+                ambientSoundState.enabled = false;
+                debugLog('AMBIENT', 'Playback blocked', err.message);
+                updateAmbientListUI(type);
+                if (!skipSave) saveAmbientState();
+                refreshStatusState();
+            });
+        } else {
+            ambientSoundState.enabled = false;
+            updateAmbientListUI(type);
+            if (!skipSave) saveAmbientState();
+            refreshStatusState();
+        }
+    }
+
+    function toggleAmbientPopover(force) {
+        if (!ambientPopover) return;
+        const shouldShow = typeof force === 'boolean' ? force : ambientPopover.hasAttribute('hidden');
+        if (shouldShow) ambientPopover.removeAttribute('hidden');
+        else ambientPopover.setAttribute('hidden', '');
+        if (ambientToggleBtn) ambientToggleBtn.setAttribute('aria-expanded', String(shouldShow));
+    }
+
+    function handleAmbientOutsideClick(event) {
+        if (!ambientPopover || ambientPopover.hasAttribute('hidden')) return;
+        if (ambientPopover.contains(event.target)) return;
+        if (ambientToggleBtn && ambientToggleBtn.contains(event.target)) return;
+        toggleAmbientPopover(false);
+    }
+
+    function toggleRemoteVideoCollapse() {
+        if (!videoBoxEl || !videoCollapseBanner) return;
+        if (collapseRemoteTimeout) clearTimeout(collapseRemoteTimeout);
+        collapseRemoteTimeout = setTimeout(() => {
+            const hasAnyVideo = cameraEnabled || remoteVideoSlots.size > 0;
+            const shouldCollapse = !hasAnyVideo;
+            videoBoxEl.classList.toggle('collapsed', shouldCollapse);
+            if (shouldCollapse) videoCollapseBanner.removeAttribute('hidden');
+            else videoCollapseBanner.setAttribute('hidden', '');
+        }, 300);
+    }
+
+    function playTimerNotification(type) {
+        const audio = TIMER_NOTIFICATION_SOUNDS[type];
+        if (!audio) {
+            debugLog('NOTIFICATION', `Unknown notification type: ${type}`);
+            return;
+        }
+        audio.currentTime = 0;
+        audio.play().then(() => {
+            debugLog('NOTIFICATION', `Playing ${type} notification`);
+        }).catch(err => {
+            debugLog('NOTIFICATION', `Failed to play ${type} notification`, err.message);
+        });
+    }
+
+    // --- Focus Statistics ---
+    function getLocalDateKey() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function updateFocusSummary() {
+        if (!focusTotalEl) return;
+        ensureFocusStatsFresh();
+        const total = Math.max(0, focusStats.totalSeconds || 0);
+        const hours = Math.floor(total / 3600).toString().padStart(2, '0');
+        const minutes = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
+        focusTotalEl.textContent = `${hours}:${minutes}`;
+    }
+
+    function saveFocusStats() {
+        try {
+            localStorage.setItem(FOCUS_STATS_KEY, JSON.stringify(focusStats));
+        } catch (err) {
+            debugLog('STORAGE', 'Focus stats save failed', err.message);
+        }
+    }
+
+    function ensureFocusStatsFresh() {
+        const today = getLocalDateKey();
+        if (focusStats.date !== today) {
+            focusStats = { date: today, totalSeconds: 0 };
+            saveFocusStats();
+        }
+    }
+
+    function scheduleFocusStatsReset() {
+        if (focusStatsResetTimer) clearTimeout(focusStatsResetTimer);
+        const now = new Date();
+        const midnight = new Date(now);
+        midnight.setHours(24, 0, 0, 0);
+        const delay = Math.max(1000, midnight.getTime() - now.getTime());
+        focusStatsResetTimer = setTimeout(() => resetFocusStats(), delay);
+    }
+
+    function resetFocusStats() {
+        focusStats = { date: getLocalDateKey(), totalSeconds: 0 };
+        saveFocusStats();
+        updateFocusSummary();
+        scheduleFocusStatsReset();
+    }
+
+    function addFocusSeconds(seconds) {
+        if (!seconds || seconds <= 0) return;
+        ensureFocusStatsFresh();
+        focusStats.totalSeconds += seconds;
+        saveFocusStats();
+        updateFocusSummary();
+    }
+
+    function loadFocusStats() {
+        const today = getLocalDateKey();
+        focusStats = { date: today, totalSeconds: 0 };
+        try {
+            const saved = JSON.parse(localStorage.getItem(FOCUS_STATS_KEY) || 'null');
+            if (saved && saved.date === today && typeof saved.totalSeconds === 'number') {
+                focusStats.totalSeconds = Math.max(0, saved.totalSeconds);
+            }
+        } catch (err) {
+            debugLog('STORAGE', 'Focus stats load failed', err.message);
+        }
+        updateFocusSummary();
+        scheduleFocusStatsReset();
+    }
+
+    // --- 2. 待办任务 ---
+    let curPrio = 3;
+
+    function setPrio(val, el) {
+        curPrio = val;
+        el.parentElement.querySelectorAll('.color-dot').forEach(d => d.style.transform = 'scale(1)');
+        el.style.transform = 'scale(1.3)';
+    }
+
+    function addTask() {
+        const input = document.getElementById('new-task');
+        if(!input.value.trim()) return;
+        const div = document.createElement('div');
+        div.className = 'todo-item';
+        div.draggable = true;
+        div.dataset.prio = curPrio;
+        const color = curPrio===3 ? 'var(--prio-high)' : (curPrio===2 ? 'var(--prio-med)' : 'var(--prio-low)');
+        div.innerHTML = `
+            <div class="prio-line" style="background:${color}"></div>
+            <div class="check-circle" onclick="toggleDone(this)"></div>
+            <span class="todo-text">${input.value}</span>
+        `;
+        div.addEventListener('dragstart', () => div.classList.add('dragging'));
+        div.addEventListener('dragend', () => div.classList.remove('dragging'));
+        const items = [...todoList.children];
+        let inserted = false;
+        for (let item of items) {
+            const itemPrio = parseInt(item.dataset.prio || 0, 10);
+            if (curPrio > itemPrio) {
+                todoList.insertBefore(div, item);
+                inserted = true;
+                break;
+            }
+        }
+        if (!inserted) todoList.appendChild(div);
+        input.value = '';
+        updateStats();
+    }
+
+    function toggleDone(btn) {
+        const item = btn.parentElement;
+        item.classList.toggle('done');
+        updateStats();
+    }
+
+    function updateStats() {
+        const all = document.querySelectorAll('.todo-item');
+        const done = document.querySelectorAll('.todo-item.done');
+        document.getElementById('total-cnt').textContent = all.length;
+        document.getElementById('done-cnt').textContent = done.length;
+        document.getElementById('prog-bar').style.width = (all.length ? (done.length/all.length*100) : 0) + '%';
+    }
+
+    todoList.addEventListener('dragover', e => {
+        e.preventDefault();
+        const afterEl = getDragAfterElement(todoList, e.clientY);
+        const dragging = document.querySelector('.dragging');
+        if (dragging) {
+            if (afterEl == null) todoList.appendChild(dragging);
+            else todoList.insertBefore(dragging, afterEl);
+        }
+    });
+
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.todo-item:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) return { offset, element: child };
+            return closest;
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    // --- 3. 计时器 ---
+    let timer = null;
+    let mode = 'focus';
+    let timeLeft = 25 * 60;
+
+    function updateDisp() {
+        const m = Math.floor(timeLeft/60).toString().padStart(2,'0');
+        const s = (timeLeft%60).toString().padStart(2,'0');
+        document.getElementById('timer-disp').textContent = `${m}:${s}`;
+    }
+
+    function toggleTimer() {
+        const btn = document.getElementById('btn-toggle');
+        const focusDur = parseInt(document.getElementById('cfg-f').value, 10) || 25;
+        const breakDur = parseInt(document.getElementById('cfg-b').value, 10) || 5;
+        if(timer) {
+            clearInterval(timer); timer = null;
+            btn.textContent = '▶';
+            btn.style.boxShadow = 'var(--shadow-btn)';
+            timerRunning = false;
+            refreshStatusState();
+        } else {
+            if(timeLeft === 25*60 && mode === 'focus') timeLeft = focusDur * 60;
+            btn.textContent = '⏸';
+            btn.style.boxShadow = 'var(--shadow-btn-inset)';
+            timerRunning = true;
+            refreshStatusState();
+            timer = setInterval(() => {
+                if(timeLeft > 0) {
+                    timeLeft--;
+                    updateDisp();
+                } else {
+                    // 播放提示音：专注时间结束播放workend，休息时间结束播放breakend
+                    const notificationType = mode === 'focus' ? 'focusEnd' : 'breakEnd';
+                    playTimerNotification(notificationType);
+
+                    // Add focus time to daily total when focus session ends
+                    if (mode === 'focus') {
+                        addFocusSeconds(focusDur * 60);
+                    }
+
+                    mode = mode==='focus' ? 'break' : 'focus';
+                    timeLeft = (mode==='focus' ? focusDur : breakDur) * 60;
+                    document.getElementById('tab-focus').className = mode==='focus'?'timer-tab active':'timer-tab';
+                    document.getElementById('tab-break').className = mode==='break'?'timer-tab active':'timer-tab';
+                    updateDisp();
+                    if (statusState.autoSync) refreshStatusState();
+                }
+            }, 1000);
+        }
+    }
+
+    function resetTimer() {
+        clearInterval(timer); timer = null;
+        document.getElementById('btn-toggle').textContent = '▶';
+        mode = 'focus';
+        timeLeft = (parseInt(document.getElementById('cfg-f').value, 10) || 25) * 60;
+        timerRunning = false;
+        updateDisp();
+        refreshStatusState();
+    }
+
+    // --- 4. 房间通信 ---
+    function generateRoomCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        return Array.from({length: 6}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+    }
+
+    function updateRoomBadge() {
+        roomCodeVal.textContent = roomId || '---';
+    }
+
+    function updatePresenceText() {
+        presenceCountEl.textContent = presenceCount;
+    }
+
+    function updatePresenceList(list) {
+        if (Array.isArray(list)) {
+            const merged = list.map(p => Object.assign({}, participantsMap.get(p.id) || {}, p));
+            presenceCache = merged;
+            participantsMap = new Map(merged.map(p => [p.id, p]));
+            merged.forEach(p => {
+                if (p && typeof p.cameraOn === 'boolean') {
+                    remoteCameraStates.set(p.id, p.cameraOn);
+                }
+            });
+            prunePeers(merged.map(p => p.id));
+            list = merged;
+        } else {
+            list = presenceCache;
+        }
+        presenceCount = list.length;
+        updatePresenceText();
+        if(list.length) {
+            presenceNamesEl.textContent = list.map(p => p.name).join(' - ');
+        } else {
+            presenceNamesEl.textContent = langDict[curLang].presenceEmpty;
+        }
+        updateRemoteNameLabel();
+        renderUserList();
+        const myId = socket && socket.id;
+        if (socket) {
+            list.forEach(p => {
+                if (p.id !== myId && !peerConnections.has(p.id) && shouldInitiate(p.id)) {
+                    createOffer(p.id);
+                }
+            });
+        }
+    }
+
+    function handleStatusUpdate(payload = {}) {
+        const { userId, status } = payload;
+        if (!userId) return;
+        const existing = participantsMap.get(userId) || { id: userId };
+        existing.status = status;
+        participantsMap.set(userId, existing);
+        if (!Array.isArray(presenceCache)) presenceCache = [];
+        presenceCache = presenceCache.map(user => user.id === userId ? Object.assign({}, user, { status }) : user);
+        renderUserList();
+    }
+
+    function prunePeers(activeIds = []) {
+        const activeSet = new Set(activeIds);
+        peerConnections.forEach((pc, id) => {
+            if (!activeSet.has(id)) {
+                pc.close();
+                peerConnections.delete(id);
+                remoteCameraStates.delete(id);
+                pendingIceCandidates.delete(id);
+                clearRemoteStream(id);
+            }
+        });
+    }
+
+    function getRemoteDisplayName(userId) {
+        if (participantsMap.has(userId)) {
+            return participantsMap.get(userId).name;
+        }
+        return langDict[curLang].camPeer;
+    }
+
+    function hasRemoteBuddyOnline() {
+        return [...participantsMap.keys()].some(id => !socket || id !== socket.id);
+    }
+
+    function updateRemotePlaceholder(customText) {
+        if (!remotePlaceholder) return;
+        const hasRemoteFeed = remoteVideoSlots.size > 0;
+        remotePlaceholder.style.display = hasRemoteFeed ? 'none' : 'flex';
+        if (!hasRemoteFeed) {
+            remotePlaceholder.textContent = customText || langDict[curLang].remoteWaiting;
+        }
+        toggleRemoteVideoCollapse();
+    }
+
+    function updateRemoteNameLabel() {
+        if (!remoteNameLabel) return;
+        const names = [...remoteVideoSlots.keys()].map(getRemoteDisplayName);
+        remoteNameLabel.textContent = names.length ? names.join(', ') : langDict[curLang].camPeer;
+    }
+
+    function showChatPlaceholder() {
+        chatMsgs.innerHTML = '';
+        const placeholder = document.createElement('div');
+        placeholder.className = 'msg system';
+        placeholder.dataset.placeholder = 'true';
+        placeholder.textContent = langDict[curLang].chatEmpty;
+        chatMsgs.appendChild(placeholder);
+    }
+
+    function clearChatPlaceholder() {
+        const placeholder = chatMsgs.querySelector('[data-placeholder]');
+        if (placeholder) placeholder.remove();
+    }
+
+    function buildMessageNode(message) {
+        const bubble = document.createElement('div');
+        bubble.classList.add('msg');
+        if (message.type === 'system') {
+            bubble.classList.add('system');
+            // Store message data for language updates
+            if (message.action && message.username) {
+                bubble.__messageData = { action: message.action, username: message.username };
+                const actionKey = message.action === 'join' ? 'userJoined' : 'userLeft';
+                bubble.textContent = `${message.username} ${langDict[curLang][actionKey]}`;
+            } else {
+                bubble.textContent = message.text;
+            }
+        } else {
+            const isMine = message.author === username;
+            bubble.classList.add(isMine ? 'r' : 'l');
+            const authorEl = document.createElement('span');
+            authorEl.className = 'msg-author';
+            authorEl.textContent = message.author || (isMine ? username : 'Guest');
+            const bodyEl = document.createElement('div');
+            bodyEl.textContent = message.text;
+            bubble.appendChild(authorEl);
+            bubble.appendChild(bodyEl);
+        }
+        return bubble;
+    }
+
+    function appendMessage(message) {
+        if (!message) return;
+        clearChatPlaceholder();
+        chatMsgs.appendChild(buildMessageNode(message));
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+    }
+
+    function renderMessages(list = []) {
+        chatMsgs.innerHTML = '';
+        if (!list.length) {
+            showChatPlaceholder();
+            return;
+        }
+        list.forEach(msg => chatMsgs.appendChild(buildMessageNode(msg)));
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+    }
+
+    function setChatEnabled(enabled) {
+        chatInput.disabled = !enabled;
+        chatSendBtn.disabled = !enabled;
+        if (enabled) chatInput.focus();
+    }
+
+    function showJoinError(msg = '') {
+        joinError.textContent = msg;
+    }
+
+    function handleJoinSubmit(e) {
+        e.preventDefault();
+        const name = joinNameInput.value.trim();
+        const targetRoom = (joinRoomInput.value.trim() || generateRoomCode()).toUpperCase();
+        if (!name) {
+            showJoinError(langDict[curLang].joinNameError);
+            return;
+        }
+        showJoinError('');
+        username = name;
+        roomId = targetRoom;
+        joinRoomInput.value = targetRoom;
+        localStorage.setItem('coStudyName', username);
+        updateRoomBadge();
+        const baseUrl = window.location.origin + window.location.pathname;
+        if (window.history && window.history.replaceState) {
+            history.replaceState(null, '', `${baseUrl}?room=${roomId}`);
+        }
+        joinOverlay.classList.add('hidden');
+        setChatEnabled(false);
+        connectSocket();
+    }
+
+    function connectSocket() {
+        if (!window.io) {
+            showJoinError(langDict[curLang].serviceError);
+            joinOverlay.classList.remove('hidden');
+            return;
+        }
+        if (socket) socket.disconnect();
+        socket = io();
+        socket.on('connect_error', () => {
+            setChatEnabled(false);
+            showJoinError(langDict[curLang].connectError);
+            joinOverlay.classList.remove('hidden');
+        });
+        socket.on('chat-message', msg => appendMessage(msg));
+        socket.on('presence', list => updatePresenceList(list || []));
+        socket.on('status-update', handleStatusUpdate);
+        socket.on('camera-status', handleCameraStatusEvent);
+        socket.on('rtc-offer', handleIncomingOffer);
+        socket.on('rtc-answer', handleIncomingAnswer);
+    socket.on('rtc-ice', handleIncomingIce);
+        socket.on('disconnect', () => {
+            setChatEnabled(false);
+            appendMessage({ type: 'system', text: langDict[curLang].disconnectMsg });
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            pendingIceCandidates.clear();
+            clearRemoteStream();
+        });
+        socket.emit('join-room', { roomId, username }, (res) => {
+            if (!res || !res.ok) {
+                setChatEnabled(false);
+                showJoinError((res && res.error) || langDict[curLang].joinFailed);
+                joinOverlay.classList.remove('hidden');
+                return;
+            }
+            showJoinError('');
+            setChatEnabled(true);
+            renderMessages(res.room?.messages || []);
+            updatePresenceList(res.room?.participants || []);
+            broadcastStatus();
+            if (cameraEnabled && localStream) {
+                notifyCameraStatus(true);
+                participantsMap.forEach((participant, id) => {
+                    if (id !== socket.id && shouldInitiate(id)) createOffer(id);
+                });
+            }
+        });
+    }
+
+    function sendMessage() {
+        if (!socket || !roomId) {
+            joinOverlay.classList.remove('hidden');
+            return;
+        }
+        const text = chatInput.value.trim();
+        if (!text) return;
+        socket.emit('send-message', { roomId, text }, (ack) => {
+            if (ack && ack.ok) chatInput.value = '';
+        });
+    }
+
+    chatForm.addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
+    joinForm.addEventListener('submit', handleJoinSubmit);
+    joinRoomInput.addEventListener('input', () => {
+        joinRoomInput.value = joinRoomInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+    if (statusPresetButtons && statusPresetButtons.length) {
+        statusPresetButtons.forEach(btn => {
+            btn.addEventListener('click', () => setStatusPreset(btn.dataset.status));
+        });
+    }
+    if (statusCustomInput) {
+        statusCustomInput.addEventListener('input', () => {
+            const value = statusCustomInput.value.slice(0, 20);
+            statusCustomInput.value = value;
+            statusState.manualText = value;
+            statusState.manualPreset = null;
+            updateStatusPresetUI(null);
+            refreshStatusState();
+        });
+    }
+    if (statusAutoSyncToggle) {
+        statusAutoSyncToggle.addEventListener('change', () => {
+            statusState.autoSync = statusAutoSyncToggle.checked;
+            refreshStatusState();
+        });
+    }
+    if (statusShareToggle) {
+        statusShareToggle.addEventListener('change', () => {
+            statusState.isShared = statusShareToggle.checked;
+            refreshStatusState();
+        });
+    }
+    if (ambientToggleBtn) {
+        ambientToggleBtn.addEventListener('click', () => toggleAmbientPopover());
+    }
+    if (ambientListEl) {
+        ambientListEl.addEventListener('click', event => {
+            const target = event.target.closest('li');
+            if (!target) return;
+            selectAmbientSound(target.dataset.sound);
+        });
+    }
+    if (ambientVolumeInput) {
+        ambientVolumeInput.addEventListener('input', () => {
+            const value = parseFloat(ambientVolumeInput.value);
+            if (!Number.isNaN(value)) {
+                ambientSoundState.volume = value;
+                if (ambientSoundState.audio) ambientSoundState.audio.volume = value;
+                saveAmbientState();
+            }
+        });
+    }
+    if (ambientStatusShareToggle) {
+        ambientStatusShareToggle.addEventListener('change', () => {
+            ambientSoundState.showInStatus = ambientStatusShareToggle.checked;
+            saveAmbientState();
+            refreshStatusState();
+        });
+    }
+    document.addEventListener('click', handleAmbientOutsideClick);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') toggleAmbientPopover(false);
+    });
+    if (focusResetBtn) {
+        focusResetBtn.addEventListener('click', () => resetFocusStats());
+    }
+    if (cameraToggleBtn) {
+        cameraToggleBtn.addEventListener('click', e => {
+            e.preventDefault();
+            toggleCamera();
+        });
+    }
+
+    // 屏幕共享按钮(用于单机测试)
+    if (screenToggleBtn) {
+        screenToggleBtn.style.display = 'inline-block';
+        screenToggleBtn.addEventListener('click', async e => {
+            e.preventDefault();
+            if (cameraEnabled) {
+                disableCamera();
+                return;
+            }
+            updateCameraToggleLabel('loading');
+            try {
+                debugLog('SCREEN', 'Requesting screen share...');
+                localStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: "always"
+                    },
+                    audio: false
+                });
+                cameraEnabled = true;
+
+                const track = localStream.getVideoTracks()[0];
+                debugLog('SCREEN', 'Screen share enabled', {
+                    streamId: localStream.id,
+                    tracks: localStream.getTracks().length,
+                    trackId: track.id,
+                    trackEnabled: track.enabled,
+                    trackMuted: track.muted,
+                    trackReadyState: track.readyState
+                });
+
+                localVideo.srcObject = localStream;
+                localVideo.style.display = 'block';
+                updateRemotePlaceholder();
+                updateCameraToggleLabel();
+                notifyCameraStatus(true);
+
+                // 监听屏幕共享停止事件
+                track.onended = () => {
+                    debugLog('SCREEN', 'Screen share stopped by user');
+                    disableCamera();
+                };
+
+                debugLog('SCREEN', `Attaching screen share to ${peerConnections.size} peer(s)`);
+                for (const [peerId, pc] of peerConnections.entries()) {
+                    debugLog('SCREEN', `Attaching to peer ${peerId}`);
+                    const attached = await attachLocalStream(pc);
+                    if (attached) {
+                        debugLog('SCREEN', `Successfully attached screen share to ${peerId}`);
+                    }
+                }
+            } catch (err) {
+                debugLog('ERROR', 'Screen share failed', err.message);
+                cameraEnabled = false;
+                updateCameraToggleLabel();
+                alert('屏幕共享失败: ' + err.message);
+            }
+        });
+    }
+
+    function updateCameraToggleLabel(state) {
+        if (!cameraToggleBtn) return;
+        if (state === 'loading') {
+            cameraToggleBtn.disabled = true;
+            cameraToggleBtn.textContent = langDict[curLang].cameraToggleStarting;
+            return;
+        }
+        cameraToggleBtn.disabled = false;
+        cameraToggleBtn.textContent = cameraEnabled ? langDict[curLang].cameraToggleOff : langDict[curLang].cameraToggleOn;
+    }
+
+    async function toggleCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert(langDict[curLang].cameraError);
+            return;
+        }
+        if (cameraEnabled) {
+            disableCamera();
+            return;
+        }
+        updateCameraToggleLabel('loading');
+        try {
+            debugLog('CAMERA', 'Requesting camera access...');
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            cameraEnabled = true;
+            debugLog('CAMERA', 'Camera enabled', {
+                streamId: localStream.id,
+                tracks: localStream.getTracks().length
+            });
+            localVideo.srcObject = localStream;
+            localVideo.style.display = 'block';
+            updateRemotePlaceholder();
+            updateCameraToggleLabel();
+            notifyCameraStatus(true);
+            debugLog('CAMERA', `Attaching local stream to ${peerConnections.size} peer(s)`);
+            for (const [peerId, pc] of peerConnections.entries()) {
+                debugLog('CAMERA', `Attaching to peer ${peerId}`);
+                const attached = await attachLocalStream(pc);
+                if (attached) {
+                    debugLog('CAMERA', `Successfully attached stream to ${peerId}, negotiation will be triggered`);
+                }
+            }
+            startAiMonitor();
+        } catch (err) {
+            console.error('camera error', err);
+            debugLog('ERROR', 'Camera access failed', err.message);
+            cameraEnabled = false;
+            updateCameraToggleLabel();
+            aiStatusEl.textContent = langDict[curLang].cameraError;
+            alert(langDict[curLang].cameraError);
+        }
+    }
+
+    function disableCamera() {
+        if (!cameraEnabled) return;
+        cameraEnabled = false;
+        if (localVideo.srcObject) {
+            localVideo.srcObject.getTracks().forEach(track => track.stop());
+            localVideo.srcObject = null;
+        }
+        localVideo.style.display = 'none';
+        localStream = null;
+        notifyCameraStatus(false);
+        updateCameraToggleLabel();
+        updateRemotePlaceholder();
+        peerConnections.forEach(pc => {
+            pc.getSenders().forEach(sender => {
+                if (sender.track && sender.track.kind === 'video') {
+                    try { sender.replaceTrack(null); } catch (_) {}
+                    try { pc.removeTrack(sender); } catch (_) {}
+                }
+            });
+        });
+        stopAiMonitor();
+        aiStatusEl.textContent = langDict[curLang].aiNeedCamera;
+    }
+
+    function notifyCameraStatus(flag) {
+        if (socket) socket.emit('camera-status', { camera: !!flag });
+    }
+
+    function shouldInitiate(targetId) {
+        if (!socket || !socket.id) return true;
+        return socket.id < targetId;
+    }
+
+    function isPolitePeer(targetId) {
+        if (!socket || !socket.id) return true;
+        return socket.id > targetId;
+    }
+
+    function ensurePeerConnection(targetId) {
+        if (peerConnections.has(targetId)) {
+            debugLog('PEER', `Reusing existing connection for ${targetId}`);
+            return peerConnections.get(targetId);
+        }
+
+        debugLog('PEER', `Creating new PeerConnection for ${targetId}`);
+        const pc = new RTCPeerConnection(STUN_CONFIG);
+        const meta = {
+            makingOffer: false,
+            ignoreOffer: false,
+            polite: isPolitePeer(targetId),
+        };
+        pc.__meta = meta;
+
+        pc.onicecandidate = event => {
+            if (event.candidate) {
+                debugLog('ICE', `Local ICE candidate for ${targetId}`, event.candidate.candidate);
+                if (socket) socket.emit('rtc-ice', { targetId, candidate: event.candidate });
+            } else {
+                debugLog('ICE', `ICE gathering complete for ${targetId}`);
+            }
+        };
+
+        pc.ontrack = event => {
+            debugLog('TRACK', `Received remote track from ${targetId}`, {
+                kind: event.track.kind,
+                streams: event.streams.length,
+                enabled: event.track.enabled,
+                readyState: event.track.readyState
+            });
+            if (event.streams && event.streams[0]) {
+                handleRemoteStream(targetId, event.streams[0]);
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            debugLog('STATE', `Connection state for ${targetId}: ${pc.connectionState}`);
+            if (['failed', 'disconnected'].includes(pc.connectionState)) {
+                clearRemoteStream(targetId);
+            }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            debugLog('ICE-STATE', `ICE connection state for ${targetId}: ${pc.iceConnectionState}`);
+        };
+
+        pc.onicegatheringstatechange = () => {
+            debugLog('ICE-GATHER', `ICE gathering state for ${targetId}: ${pc.iceGatheringState}`);
+        };
+
+        pc.onsignalingstatechange = () => {
+            debugLog('SIGNAL', `Signaling state for ${targetId}: ${pc.signalingState}`);
+        };
+
+        pc.onnegotiationneeded = async () => {
+            debugLog('NEGOTIATE', `Negotiation needed for ${targetId}`);
+            try {
+                meta.makingOffer = true;
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                debugLog('OFFER', `Created and set local offer for ${targetId}`);
+                socket.emit('rtc-offer', { targetId, sdp: pc.localDescription });
+            } catch (err) {
+                console.error('negotiation error', err);
+                debugLog('ERROR', `Negotiation failed for ${targetId}`, err.message);
+            } finally {
+                meta.makingOffer = false;
+            }
+        };
+
+        peerConnections.set(targetId, pc);
+        debugLog('PEER', `PeerConnection created and stored for ${targetId}`);
+
+        // 立即尝试添加本地流（如果存在）
+        attachLocalStream(pc).then(attached => {
+            if (attached) {
+                debugLog('PEER', `Local stream attached during connection creation for ${targetId}`);
+            }
+        });
+
+        return pc;
+    }
+
+    async function attachLocalStream(pc) {
+        if (!localStream) {
+            debugLog('STREAM', 'No local stream to attach');
+            return false;
+        }
+        const track = localStream.getVideoTracks()[0];
+        if (!track) {
+            debugLog('STREAM', 'No video track in local stream');
+            return false;
+        }
+
+        debugLog('STREAM', 'Attaching local track', {
+            trackId: track.id,
+            enabled: track.enabled,
+            readyState: track.readyState,
+            muted: track.muted
+        });
+
+        const existingSender = pc.getSenders().find(sender => sender.track && sender.track.kind === 'video');
+        if (existingSender) {
+            if (existingSender.track !== track) {
+                debugLog('STREAM', 'Replacing existing video track');
+                await existingSender.replaceTrack(track);
+                return true;
+            } else {
+                debugLog('STREAM', 'Track already attached, skipping');
+                return false;
+            }
+        } else {
+            debugLog('STREAM', 'Adding new video track to peer connection');
+            pc.addTrack(track, localStream);
+            return true;
+        }
+    }
+
+    function queuePendingIceCandidate(peerId, candidate) {
+        if (!pendingIceCandidates.has(peerId)) {
+            pendingIceCandidates.set(peerId, []);
+        }
+        pendingIceCandidates.get(peerId).push(candidate);
+        debugLog('ICE-QUEUE', `Queued ICE candidate for ${peerId}, total: ${pendingIceCandidates.get(peerId).length}`);
+    }
+
+    async function addIceCandidateSafe(pc, candidate) {
+        try {
+            await pc.addIceCandidate(candidate);
+            debugLog('ICE', 'Successfully added ICE candidate');
+        } catch (err) {
+            console.error('Failed to add ICE candidate:', err);
+            debugLog('ERROR', 'Failed to add ICE candidate', err.message);
+        }
+    }
+
+    async function flushPendingIceCandidates(peerId, pc) {
+        const pending = pendingIceCandidates.get(peerId);
+        if (!pending || !pending.length) {
+            debugLog('ICE-FLUSH', `No pending candidates for ${peerId}`);
+            return;
+        }
+
+        debugLog('ICE-FLUSH', `Flushing ${pending.length} candidates for ${peerId}`);
+        pendingIceCandidates.delete(peerId);
+        for (const iceCandidate of pending) {
+            await addIceCandidateSafe(pc, iceCandidate);
+        }
+        debugLog('ICE-FLUSH', `Completed flushing candidates for ${peerId}`);
+    }
+
+    async function createOffer(targetId) {
+        const pc = ensurePeerConnection(targetId);
+        if (!pc) return;
+        const meta = pc.__meta || {};
+        try {
+            meta.makingOffer = true;
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('rtc-offer', { targetId, sdp: pc.localDescription });
+        } catch (err) {
+            console.error('offer error', err);
+        } finally {
+            meta.makingOffer = false;
+        }
+    }
+
+    async function handleIncomingOffer({ from, sdp }) {
+        debugLog('OFFER', `Received offer from ${from}`);
+        const pc = ensurePeerConnection(from);
+        const meta = pc.__meta || { polite: true };
+        const offer = new RTCSessionDescription(sdp);
+        const offerCollision = meta.makingOffer || pc.signalingState !== 'stable';
+        meta.ignoreOffer = !meta.polite && offerCollision;
+
+        if (meta.ignoreOffer) {
+            debugLog('OFFER', `Ignoring offer from ${from} due to collision`);
+            return;
+        }
+
+        try {
+            if (offerCollision) {
+                debugLog('OFFER', `Collision detected, rolling back for ${from}`);
+                try {
+                    await pc.setLocalDescription({ type: 'rollback' });
+                } catch (rollbackErr) {
+                    console.warn('rollback failed', rollbackErr);
+                }
+            }
+            await pc.setRemoteDescription(offer);
+            debugLog('OFFER', `Set remote description (offer) for ${from}`);
+            meta.ignoreOffer = false;
+            await flushPendingIceCandidates(from, pc);
+            attachLocalStream(pc);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            debugLog('ANSWER', `Created and set local answer for ${from}`);
+            socket.emit('rtc-answer', { targetId: from, sdp: pc.localDescription });
+        } catch (err) {
+            console.error('answer error', err);
+            debugLog('ERROR', `Failed to handle offer from ${from}`, err.message);
+        }
+    }
+
+    async function handleIncomingAnswer({ from, sdp }) {
+        debugLog('ANSWER', `Received answer from ${from}`);
+        const pc = ensurePeerConnection(from);
+        if (!pc) {
+            debugLog('ERROR', `No peer connection found for ${from}`);
+            return;
+        }
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            debugLog('ANSWER', `Set remote description (answer) for ${from}`);
+            if (pc.__meta) pc.__meta.ignoreOffer = false;
+            await flushPendingIceCandidates(from, pc);
+            attachLocalStream(pc);
+        } catch (err) {
+            console.error('set answer error', err);
+            debugLog('ERROR', `Failed to handle answer from ${from}`, err.message);
+        }
+    }
+
+    async function handleIncomingIce({ from, candidate }) {
+        const pc = ensurePeerConnection(from);
+        if (!candidate || !pc) {
+            debugLog('ICE', 'Ignoring ICE: no candidate or no peer connection');
+            return;
+        }
+        if (pc.__meta && pc.__meta.ignoreOffer) {
+            debugLog('ICE', `Ignoring ICE from ${from} (ignoreOffer=true)`);
+            return;
+        }
+
+        const iceCandidate = new RTCIceCandidate(candidate);
+        debugLog('ICE', `Received ICE candidate from ${from}`, candidate.candidate);
+
+        if (!pc.remoteDescription || !pc.remoteDescription.type) {
+            debugLog('ICE', `Remote description not ready, queuing candidate for ${from}`);
+            queuePendingIceCandidate(from, iceCandidate);
+            return;
+        }
+
+        debugLog('ICE', `Adding ICE candidate immediately for ${from}`);
+        await addIceCandidateSafe(pc, iceCandidate);
+    }
+
+    function ensureRemoteVideoSlot(userId) {
+        if (!remoteGrid) {
+            debugLog('ERROR', 'Remote grid element not found');
+            return null;
+        }
+        if (remoteVideoSlots.has(userId)) {
+            debugLog('VIDEO-SLOT', `Reusing existing video slot for ${userId}`);
+            return remoteVideoSlots.get(userId);
+        }
+
+        debugLog('VIDEO-SLOT', `Creating new video slot for ${userId}`);
+        const tile = document.createElement('div');
+        tile.className = 'remote-tile';
+        tile.dataset.peerId = userId;
+
+        const videoEl = document.createElement('video');
+        videoEl.autoplay = true;
+        videoEl.playsInline = true;
+        videoEl.muted = false;
+        videoEl.dataset.peerId = userId;
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'remote-tile-name';
+        nameEl.textContent = getRemoteDisplayName(userId);
+
+        tile.appendChild(videoEl);
+        tile.appendChild(nameEl);
+        remoteGrid.appendChild(tile);
+
+        const slot = { tile, videoEl, nameEl };
+        remoteVideoSlots.set(userId, slot);
+        debugLog('VIDEO-SLOT', `Video slot created for ${userId}, total slots: ${remoteVideoSlots.size}`);
+        updateRemoteNameLabel();
+        updateRemotePlaceholder();
+        return slot;
+    }
+
+    function removeRemoteVideoSlot(userId) {
+        const slot = remoteVideoSlots.get(userId);
+        if (!slot) {
+            debugLog('VIDEO-SLOT', `No video slot found for ${userId}`);
+            return;
+        }
+        debugLog('VIDEO-SLOT', `Removing video slot for ${userId}`);
+        if (slot.videoEl.srcObject) {
+            slot.videoEl.srcObject.getTracks().forEach(track => track.stop());
+            slot.videoEl.srcObject = null;
+        }
+        slot.tile.remove();
+        remoteVideoSlots.delete(userId);
+        debugLog('VIDEO-SLOT', `Video slot removed for ${userId}, remaining slots: ${remoteVideoSlots.size}`);
+        updateRemoteNameLabel();
+        updateRemotePlaceholder();
+    }
+
+    function handleRemoteStream(userId, stream) {
+        debugLog('STREAM', `Handling remote stream from ${userId}`, {
+            streamId: stream.id,
+            tracks: stream.getTracks().length,
+            videoTracks: stream.getVideoTracks().length
+        });
+
+        const slot = ensureRemoteVideoSlot(userId);
+        if (!slot) {
+            debugLog('ERROR', `Failed to create/get video slot for ${userId}`);
+            return;
+        }
+        slot.nameEl.textContent = getRemoteDisplayName(userId);
+
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+            debugLog('STREAM', `Remote video track details for ${userId}:`, {
+                id: videoTrack.id,
+                enabled: videoTrack.enabled,
+                muted: videoTrack.muted,
+                readyState: videoTrack.readyState,
+                label: videoTrack.label
+            });
+
+            videoTrack.onmute = () => {
+                debugLog('STREAM', `Remote video track MUTED for ${userId}`);
+            };
+            videoTrack.onunmute = () => {
+                debugLog('STREAM', `Remote video track UNMUTED for ${userId}`);
+            };
+            videoTrack.onended = () => {
+                debugLog('STREAM', `Remote video track ENDED for ${userId}`);
+                clearRemoteStream(userId);
+            };
+        } else {
+            debugLog('ERROR', `No video track in remote stream from ${userId}`);
+        }
+
+        if (slot.videoEl.srcObject !== stream) {
+            slot.videoEl.srcObject = stream;
+            debugLog('STREAM', `Set remote video srcObject for ${userId}`);
+
+            slot.videoEl.play().then(() => {
+                debugLog('STREAM', `Remote video playing for ${userId}`);
+            }).catch(err => {
+                debugLog('ERROR', `Failed to play remote video for ${userId}`, err.message);
+            });
+        }
+        slot.videoEl.style.display = 'block';
+        if (remoteStatusEl) remoteStatusEl.textContent = '';
+        updateRemotePlaceholder();
+        updateRemoteNameLabel();
+
+        slot.videoEl.onloadedmetadata = () => {
+            debugLog('STREAM', `Remote video metadata loaded for ${userId}`, {
+                videoWidth: slot.videoEl.videoWidth,
+                videoHeight: slot.videoEl.videoHeight,
+                videoElement_muted: slot.videoEl.muted,
+                videoElement_volume: slot.videoEl.volume
+            });
+
+            if (slot.videoEl.videoWidth === 0 || slot.videoEl.videoHeight === 0) {
+                debugLog('ERROR', `Video dimensions are 0x0 for ${userId}, waiting for actual video data`);
+            }
+        };
+
+        slot.videoEl.onplay = () => {
+            debugLog('STREAM', `Remote video started playing for ${userId}`);
+        };
+
+        slot.videoEl.oncanplay = () => {
+            debugLog('STREAM', `Remote video can play for ${userId}`, {
+                width: slot.videoEl.videoWidth,
+                height: slot.videoEl.videoHeight
+            });
+        };
+
+        slot.videoEl.onplaying = () => {
+            debugLog('STREAM', `Remote video is actively playing for ${userId}`);
+        };
+    }
+
+    function clearRemoteStream(userId) {
+        if (userId) {
+            debugLog('STREAM', `Clearing remote stream for specific user: ${userId}`);
+            removeRemoteVideoSlot(userId);
+        } else {
+            debugLog('STREAM', 'Clearing all remote streams');
+            [...remoteVideoSlots.keys()].forEach(id => removeRemoteVideoSlot(id));
+        }
+        updateRemotePlaceholder();
+        updateRemoteNameLabel();
+        if (remoteStatusEl) {
+            const hasRemoteBuddy = hasRemoteBuddyOnline();
+            remoteStatusEl.textContent = remoteVideoSlots.size || !hasRemoteBuddy ? '' : langDict[curLang].remoteOffline;
+        }
+    }
+
+    function handleCameraStatusEvent(payload = {}) {
+        const { userId, camera } = payload;
+        if (socket && userId === socket.id) return;
+        remoteCameraStates.set(userId, !!camera);
+        debugLog('CAMERA-STATUS', `User ${userId} camera status: ${camera}`);
+        if (!camera) {
+            clearRemoteStream(userId);
+        } else if (remoteStatusEl) {
+            remoteStatusEl.textContent = '';
+        }
+        if (!remoteVideoSlots.size && remoteStatusEl) {
+            const hasRemoteBuddy = hasRemoteBuddyOnline();
+            remoteStatusEl.textContent = hasRemoteBuddy ? langDict[curLang].remoteOffline : '';
+        }
+    }
+
+    function initAiDetector() {
+        if (!('FaceDetector' in window)) {
+            aiDetector = null;
+            aiStatusEl.textContent = langDict[curLang].aiUnsupported;
+            setAiDotState('neutral');
+            return false;
+        }
+        if (!aiDetector) {
+            try {
+                aiDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+            } catch (err) {
+                aiDetector = null;
+                aiStatusEl.textContent = langDict[curLang].aiUnsupported;
+                setAiDotState('neutral');
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function startAiMonitor() {
+        if (!initAiDetector()) return;
+        if (aiMonitorTimer) return;
+        aiMonitorTimer = setInterval(runAiScan, 4000);
+        aiStatusEl.textContent = langDict[curLang].aiReady;
+        setAiDotState();
+    }
+
+    function stopAiMonitor() {
+        if (aiMonitorTimer) {
+            clearInterval(aiMonitorTimer);
+            aiMonitorTimer = null;
+        }
+        setAiDotState('neutral');
+    }
+
+    async function runAiScan() {
+        if (!cameraEnabled || !localVideo.videoWidth) {
+            aiStatusEl.textContent = langDict[curLang].aiNeedCamera;
+            setAiDotState('neutral');
+            return;
+        }
+        try {
+            const faces = await aiDetector.detect(localVideo);
+            if (faces.length) {
+                aiStatusEl.textContent = langDict[curLang].aiFocused;
+                setAiDotState();
+            } else {
+                aiStatusEl.textContent = langDict[curLang].aiAway;
+                setAiDotState('warn');
+            }
+        } catch (err) {
+            aiStatusEl.textContent = langDict[curLang].aiUnsupported;
+            setAiDotState('neutral');
+            stopAiMonitor();
+        }
+    }
+
+    function setAiDotState(state) {
+        aiDot.classList.remove('warn', 'neutral');
+        if (state === 'warn') aiDot.classList.add('warn');
+        else if (state === 'neutral') aiDot.classList.add('neutral');
+    }
+
+    function shareRoom() {
+        const target = roomId || (joinRoomInput.value.trim().toUpperCase() || generateRoomCode());
+        const link = `${window.location.origin}${window.location.pathname}?room=${target}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).then(() => {
+                alert(langDict[curLang].shareSuccess);
+            }).catch(() => {
+                window.prompt(langDict[curLang].shareFallback, link);
+            });
+        } else {
+            window.prompt(langDict[curLang].shareFallback, link);
+        }
+    }
+
+    (function initShell(){
+        const params = new URLSearchParams(window.location.search);
+        const incomingRoom = (params.get('room') || '').trim().toUpperCase();
+        if (incomingRoom) {
+            roomId = incomingRoom;
+            joinRoomInput.value = incomingRoom;
+        } else {
+            joinRoomInput.value = generateRoomCode();
+        }
+        const savedName = localStorage.getItem('coStudyName') || '';
+        if (savedName) joinNameInput.value = savedName;
+        showChatPlaceholder();
+        updateDisp();
+        updateRemotePlaceholder();
+        initAiDetector();
+        updateCameraToggleLabel();
+        aiStatusEl.textContent = langDict[curLang].aiNeedCamera;
+        loadStatusState();
+        loadAmbientState();
+        loadFocusStats();
+        applyLanguage();
+        updatePresenceList([]);
+        setChatEnabled(false);
+    })();
+</script>
+</body>
+</html>
