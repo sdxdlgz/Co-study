@@ -1,25 +1,67 @@
-﻿const express = require('express');
+const express = require('express');
 const http = require('http');
 const path = require('path');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
 const ROOM_HISTORY_LIMIT = 80;
 const ROOM_TTL_MS = 1000 * 60 * 30; // 30 minutes
+const SESSION_COOKIE_NAME = 'coStudySessionId';
+const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 // 追踪待发送的离开消息定时器，用于取消
-const pendingLeaveTimers = new Map(); // key: `${roomId}:${username}`, value: timeoutId
+// key: `${roomId}:${username}`, value: { timeoutId, sessionId }
+const pendingLeaveTimers = new Map();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+const rooms = new Map();
+
+// Cookie解析
+function parseCookies(cookieHeader = '') {
+    return cookieHeader.split(';').reduce((acc, part) => {
+        if (!part) return acc;
+        const [rawKey, ...rawValue] = part.split('=');
+        if (!rawKey) return acc;
+        const key = rawKey.trim();
+        if (!key) return acc;
+        const value = rawValue.join('=').trim();
+        try {
+            acc[key] = value ? decodeURIComponent(value) : '';
+        } catch (_err) {
+            acc[key] = value;
+        }
+        return acc;
+    }, {});
+}
+
+// 从socket获取sessionId
+function getSessionIdFromSocket(socket) {
+    const header = (socket.handshake && socket.handshake.headers && socket.handshake.headers.cookie) || '';
+    const cookies = parseCookies(header);
+    return cookies[SESSION_COOKIE_NAME] || null;
+}
+
+// 设置session cookie的中间件
+function sessionMiddleware(req, res, next) {
+    const cookies = parseCookies(req.headers.cookie || '');
+    let sessionId = cookies[SESSION_COOKIE_NAME];
+    if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_COOKIE_MAX_AGE}`);
+    }
+    req.sessionId = sessionId;
+    next();
+}
+
 app.use(express.json());
+app.use(sessionMiddleware);
 
 // 静态文件服务 - 音频文件
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
-
-const rooms = new Map();
 
 function normalizeRoom(roomId = '') {
     return roomId.trim().toUpperCase();
@@ -110,6 +152,10 @@ app.get('/', (_req, res) => {
 });
 
 io.on('connection', (socket) => {
+    // 从cookie获取sessionId
+    const sessionId = getSessionIdFromSocket(socket) || crypto.randomUUID();
+    socket.data.sessionId = sessionId;
+
     socket.on('join-room', (payload = {}, ack = () => {}) => {
         const { roomId, username } = payload;
         const cleanName = (username || '').trim();
@@ -125,30 +171,44 @@ io.on('connection', (socket) => {
         const room = ensureRoom(normalizedRoom);
         const userKey = `${normalizedRoom}:${cleanName}`;
 
-        // 检查是否有待发送的离开消息，如果有则取消（说明是刷新）
+        // 检查是否有待发送的离开消息
+        let isRejoin = false;
         const pendingTimer = pendingLeaveTimers.get(userKey);
-        const isRejoin = !!pendingTimer;
         if (pendingTimer) {
-            clearTimeout(pendingTimer);
-            pendingLeaveTimers.delete(userKey);
+            // 只有同一个session才能取消离开消息（刷新场景）
+            if (pendingTimer.sessionId === sessionId) {
+                clearTimeout(pendingTimer.timeoutId);
+                pendingLeaveTimers.delete(userKey);
+                isRejoin = true;
+            }
         }
 
-        // 踢掉同名的旧连接（处理高速刷新的情况）
-        const existingUser = Array.from(room.users.entries()).find(([id, u]) => u.name === cleanName);
-        if (existingUser) {
-            const [oldSocketId] = existingUser;
-            room.users.delete(oldSocketId);
-            // 通知旧socket断开
-            const oldSocket = io.sockets.sockets.get(oldSocketId);
-            if (oldSocket) {
-                oldSocket.leave(normalizedRoom);
-                oldSocket.data.roomId = null; // 防止disconnect时再次处理
-            }
+        // 检查房间内是否已有同名用户
+        const matchingUsers = Array.from(room.users.entries()).filter(([, u]) => u.name === cleanName);
+
+        // 检查是否有来自不同session的同名用户（真正的冲突）
+        const hasConflict = matchingUsers.some(([, u]) => u.sessionId && u.sessionId !== sessionId);
+        if (hasConflict) {
+            return ack({ ok: false, error: '该昵称已被使用，请换一个' });
+        }
+
+        // 清理同一session的旧连接（刷新场景）
+        if (matchingUsers.length > 0) {
+            matchingUsers.forEach(([oldSocketId]) => {
+                room.users.delete(oldSocketId);
+                const oldSocket = io.sockets.sockets.get(oldSocketId);
+                if (oldSocket) {
+                    oldSocket.leave(normalizedRoom);
+                    oldSocket.data.roomId = null; // 防止disconnect时再次处理
+                }
+            });
+            isRejoin = true;
         }
 
         room.users.set(socket.id, {
             socketId: socket.id,
             name: cleanName,
+            sessionId: sessionId,
             joinedAt: Date.now(),
             cameraOn: false,
             status: null,
@@ -252,7 +312,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        const { roomId } = socket.data;
+        const { roomId, sessionId: userSessionId } = socket.data;
         if (!roomId) return;
         const room = rooms.get(roomId);
         if (!room) return;
@@ -266,8 +326,23 @@ io.on('connection', (socket) => {
         if (user) {
             const userKey = `${roomId}:${user.name}`;
 
-            // 延迟3秒发送离开消息，如果用户在这期间重新加入则取消
-            const timerId = setTimeout(() => {
+            // 清除之前可能存在的定时器
+            const existingPending = pendingLeaveTimers.get(userKey);
+            if (existingPending) {
+                clearTimeout(existingPending.timeoutId);
+            }
+
+            // 创建新的定时器记录
+            const timerRecord = {
+                sessionId: user.sessionId || userSessionId,
+                timeoutId: null
+            };
+
+            timerRecord.timeoutId = setTimeout(() => {
+                // 确保这个定时器还是当前有效的
+                const activeRecord = pendingLeaveTimers.get(userKey);
+                if (activeRecord !== timerRecord) return;
+
                 pendingLeaveTimers.delete(userKey);
                 const currentRoom = rooms.get(roomId);
                 if (currentRoom) {
@@ -278,7 +353,7 @@ io.on('connection', (socket) => {
                 }
             }, 3000);
 
-            pendingLeaveTimers.set(userKey, timerId);
+            pendingLeaveTimers.set(userKey, timerRecord);
         }
 
         scheduleRoomCleanup(roomId);
