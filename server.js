@@ -9,16 +9,52 @@ const ROOM_HISTORY_LIMIT = 80;
 const ROOM_TTL_MS = 1000 * 60 * 30; // 30 minutes
 const SESSION_COOKIE_NAME = 'coStudySessionId';
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+const CLIENT_ID_MAX_LENGTH = 64;
 
 // 追踪待发送的离开消息定时器，用于取消
-// key: `${roomId}:${username}`, value: { timeoutId, sessionId }
+// key: `${roomId}:${username}`, value: { timeoutId, sessionId, clientId }
 const pendingLeaveTimers = new Map();
+
+// 标记已被清理的socket，其disconnect事件应被跳过
+const skippedDisconnects = new Set();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 const rooms = new Map();
+
+// 构建身份索引键
+function buildIdentityKey(roomId, sessionId, clientId) {
+    if (!roomId) return null;
+    return `${roomId}:${sessionId || ''}:${clientId || ''}`;
+}
+
+// 统一移除用户的方法，确保清理所有相关数据
+function removeUserFromRoom(room, socketId, normalizedRoom, existingRecord = null) {
+    if (!room || !socketId) return false;
+    const record = existingRecord || room.users.get(socketId);
+    if (!record) return false;
+
+    room.users.delete(socketId);
+
+    // 清理身份索引
+    const identityKey = record.identityKey || buildIdentityKey(normalizedRoom, record.sessionId, record.clientId);
+    if (identityKey && room.identities && room.identities.get(identityKey) === socketId) {
+        room.identities.delete(identityKey);
+    }
+
+    // 尝试清理旧socket
+    const socketRef = io.sockets.sockets.get(socketId);
+    if (socketRef) {
+        socketRef.leave(normalizedRoom);
+        socketRef.data.roomId = null;
+    } else {
+        // 旧socket已被清理，标记其disconnect应被跳过
+        skippedDisconnects.add(socketId);
+    }
+    return true;
+}
 
 // Cookie解析
 function parseCookies(cookieHeader = '') {
@@ -43,6 +79,35 @@ function getSessionIdFromSocket(socket) {
     const header = (socket.handshake && socket.handshake.headers && socket.handshake.headers.cookie) || '';
     const cookies = parseCookies(header);
     return cookies[SESSION_COOKIE_NAME] || null;
+}
+
+// 规范化客户端ID
+function normalizeClientId(raw = '') {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    return trimmed.slice(0, CLIENT_ID_MAX_LENGTH);
+}
+
+// 解析并确保socket有clientId
+function resolveClientId(socket, candidate) {
+    const normalized = normalizeClientId(candidate);
+    if (normalized) {
+        socket.data.clientId = normalized;
+        return normalized;
+    }
+    if (socket.data.clientId) return socket.data.clientId;
+    const fallback = socket.data.sessionId || crypto.randomUUID();
+    socket.data.clientId = fallback;
+    return fallback;
+}
+
+// 判断是否为同一身份（通过sessionId或clientId匹配）
+function isSameIdentity(record = {}, sessionId, clientId) {
+    if (!record) return false;
+    if (sessionId && record.sessionId && record.sessionId === sessionId) return true;
+    if (clientId && record.clientId && record.clientId === clientId) return true;
+    return false;
 }
 
 // 设置session cookie的中间件
@@ -71,9 +136,13 @@ function ensureRoom(roomId) {
     const normalized = normalizeRoom(roomId);
     if (!normalized) return null;
     if (!rooms.has(normalized)) {
-        rooms.set(normalized, { users: new Map(), messages: [], cleanupTimer: null });
+        rooms.set(normalized, { users: new Map(), messages: [], identities: new Map(), cleanupTimer: null });
     }
     const room = rooms.get(normalized);
+    // 兼容旧房间数据
+    if (!room.identities) {
+        room.identities = new Map();
+    }
     if (room.cleanupTimer) {
         clearTimeout(room.cleanupTimer);
         room.cleanupTimer = null;
@@ -152,14 +221,20 @@ app.get('/', (_req, res) => {
 });
 
 io.on('connection', (socket) => {
-    // 从cookie获取sessionId
-    const sessionId = getSessionIdFromSocket(socket) || crypto.randomUUID();
+    // 从handshake.auth中获取客户端ID
+    const auth = socket.handshake && socket.handshake.auth;
+    const handshakeClientId = normalizeClientId(auth && auth.clientId);
+
+    // 从cookie获取sessionId，优先使用clientId作为后备
+    const sessionId = getSessionIdFromSocket(socket) || handshakeClientId || crypto.randomUUID();
     socket.data.sessionId = sessionId;
+    socket.data.clientId = handshakeClientId || sessionId;
 
     socket.on('join-room', (payload = {}, ack = () => {}) => {
-        const { roomId, username } = payload;
+        const { roomId, username, clientId: payloadClientId } = payload;
         const cleanName = (username || '').trim();
         const normalizedRoom = normalizeRoom(roomId);
+        const clientId = resolveClientId(socket, payloadClientId);
 
         if (!cleanName) {
             return ack({ ok: false, error: '请填写昵称' });
@@ -169,50 +244,79 @@ io.on('connection', (socket) => {
         }
 
         const room = ensureRoom(normalizedRoom);
+        let isRejoin = false;
+
+        // 首先通过身份索引回收同一身份的旧连接（核心：解决快速刷新问题）
+        const identityKey = buildIdentityKey(normalizedRoom, sessionId, clientId);
+        if (identityKey) {
+            const previousSocketId = room.identities.get(identityKey);
+            if (previousSocketId && previousSocketId !== socket.id) {
+                if (removeUserFromRoom(room, previousSocketId, normalizedRoom)) {
+                    isRejoin = true;
+                }
+            }
+        }
+
         const userKey = `${normalizedRoom}:${cleanName}`;
 
-        // 检查是否有待发送的离开消息
-        let isRejoin = false;
+        // 检查是否有待发送的离开消息（刷新场景）
         const pendingTimer = pendingLeaveTimers.get(userKey);
         if (pendingTimer) {
-            // 只有同一个session才能取消离开消息（刷新场景）
-            if (pendingTimer.sessionId === sessionId) {
+            // 通过sessionId或clientId匹配来判断是否同一用户
+            if (isSameIdentity(pendingTimer, sessionId, clientId)) {
                 clearTimeout(pendingTimer.timeoutId);
                 pendingLeaveTimers.delete(userKey);
                 isRejoin = true;
+            } else {
+                // 有其他用户正在使用此昵称（在离开窗口期内）
+                return ack({ ok: false, error: '该昵称已被使用，请换一个' });
             }
         }
 
         // 检查房间内是否已有同名用户
         const matchingUsers = Array.from(room.users.entries()).filter(([, u]) => u.name === cleanName);
+        const releasableUsers = [];
+        let hasConflict = false;
 
-        // 检查是否有来自不同session的同名用户（真正的冲突）
-        const hasConflict = matchingUsers.some(([, u]) => u.sessionId && u.sessionId !== sessionId);
+        matchingUsers.forEach(([existingSocketId, user]) => {
+            if (isSameIdentity(user, sessionId, clientId)) {
+                releasableUsers.push([existingSocketId, user]);
+            } else {
+                hasConflict = true;
+            }
+        });
+
         if (hasConflict) {
             return ack({ ok: false, error: '该昵称已被使用，请换一个' });
         }
 
-        // 清理同一session的旧连接（刷新场景）
-        if (matchingUsers.length > 0) {
-            matchingUsers.forEach(([oldSocketId]) => {
-                room.users.delete(oldSocketId);
-                const oldSocket = io.sockets.sockets.get(oldSocketId);
-                if (oldSocket) {
-                    oldSocket.leave(normalizedRoom);
-                    oldSocket.data.roomId = null; // 防止disconnect时再次处理
+        // 清理同一身份的旧连接（刷新场景）
+        if (releasableUsers.length > 0) {
+            releasableUsers.forEach(([oldSocketId, userRecord]) => {
+                if (removeUserFromRoom(room, oldSocketId, normalizedRoom, userRecord)) {
+                    isRejoin = true;
                 }
             });
-            isRejoin = true;
         }
 
-        room.users.set(socket.id, {
+        // 创建用户记录
+        const userRecord = {
             socketId: socket.id,
             name: cleanName,
-            sessionId: sessionId,
+            sessionId,
+            clientId,
+            identityKey,
             joinedAt: Date.now(),
             cameraOn: false,
             status: null,
-        });
+        };
+
+        room.users.set(socket.id, userRecord);
+
+        // 更新身份索引
+        if (identityKey) {
+            room.identities.set(identityKey, socket.id);
+        }
 
         socket.data.username = cleanName;
         socket.data.roomId = normalizedRoom;
@@ -312,13 +416,28 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        const { roomId, sessionId: userSessionId } = socket.data;
+        // 检查是否已被标记为跳过（由removeUserFromRoom标记）
+        if (skippedDisconnects.has(socket.id)) {
+            skippedDisconnects.delete(socket.id);
+            return;
+        }
+
+        const { roomId, sessionId: userSessionId, clientId: userClientId } = socket.data;
         if (!roomId) return;
         const room = rooms.get(roomId);
         if (!room) return;
 
         const user = room.users.get(socket.id);
         room.users.delete(socket.id);
+
+        // 清理身份索引
+        if (user) {
+            const identityKey = user.identityKey || buildIdentityKey(roomId, user.sessionId, user.clientId || userClientId);
+            if (identityKey && room.identities && room.identities.get(identityKey) === socket.id) {
+                room.identities.delete(identityKey);
+            }
+        }
+
         io.to(roomId).emit('camera-status', { userId: socket.id, camera: false });
         const snapshot = roomSnapshot(roomId);
         io.to(roomId).emit('presence', snapshot.participants);
@@ -332,9 +451,10 @@ io.on('connection', (socket) => {
                 clearTimeout(existingPending.timeoutId);
             }
 
-            // 创建新的定时器记录
+            // 创建新的定时器记录（包含clientId用于刷新场景识别）
             const timerRecord = {
                 sessionId: user.sessionId || userSessionId,
+                clientId: user.clientId || userClientId || socket.data.clientId || null,
                 timeoutId: null
             };
 
@@ -346,14 +466,6 @@ io.on('connection', (socket) => {
                 pendingLeaveTimers.delete(userKey);
                 const currentRoom = rooms.get(roomId);
                 if (currentRoom) {
-                    // 检查用户是否已经重新加入（同session）
-                    const stillPresent = Array.from(currentRoom.users.values()).some(
-                        (participant) => participant.name === user.name && participant.sessionId === user.sessionId
-                    );
-                    if (stillPresent) {
-                        // 用户已重新连接，不发送离开消息
-                        return;
-                    }
                     const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
                     currentRoom.messages.push(systemMsg);
                     if (currentRoom.messages.length > ROOM_HISTORY_LIMIT) currentRoom.messages.shift();
