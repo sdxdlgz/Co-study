@@ -124,6 +124,21 @@ io.on('connection', (socket) => {
         }
 
         const room = ensureRoom(normalizedRoom);
+
+        // 检查是否是刷新场景（同名用户短时间内重新加入）
+        const userKey = `${normalizedRoom}:${cleanName}`;
+        const lastLeft = recentlyLeftUsers.get(userKey);
+        const isRejoin = lastLeft && (Date.now() - lastLeft < REJOIN_GRACE_MS);
+        recentlyLeftUsers.delete(userKey);
+
+        // 检查房间内是否已有同名用户（非刷新场景）
+        if (!isRejoin) {
+            const existingUser = Array.from(room.users.values()).find(u => u.name === cleanName);
+            if (existingUser) {
+                return ack({ ok: false, error: '该昵称已被使用，请换一个' });
+            }
+        }
+
         room.users.set(socket.id, {
             socketId: socket.id,
             name: cleanName,
@@ -134,18 +149,13 @@ io.on('connection', (socket) => {
 
         socket.data.username = cleanName;
         socket.data.roomId = normalizedRoom;
+        socket.data.isRejoin = isRejoin; // 标记是否是刷新场景
         socket.join(normalizedRoom);
 
         const snapshot = roomSnapshot(normalizedRoom);
         ack({ ok: true, room: snapshot });
 
         io.to(normalizedRoom).emit('presence', snapshot.participants);
-
-        // 检查是否是刷新场景（短时间内同一用户重新加入）
-        const userKey = `${normalizedRoom}:${cleanName}`;
-        const lastLeft = recentlyLeftUsers.get(userKey);
-        const isRejoin = lastLeft && (Date.now() - lastLeft < REJOIN_GRACE_MS);
-        recentlyLeftUsers.delete(userKey); // 清除记录
 
         // 只有非刷新场景才发送加入消息
         if (!isRejoin) {
@@ -250,21 +260,18 @@ io.on('connection', (socket) => {
         if (user) {
             // 记录用户离开时间，用于检测刷新场景
             const userKey = `${roomId}:${user.name}`;
-            recentlyLeftUsers.set(userKey, Date.now());
-            // 10秒后清理记录
-            setTimeout(() => {
-                if (recentlyLeftUsers.get(userKey) === Date.now()) {
-                    recentlyLeftUsers.delete(userKey);
-                }
-            }, REJOIN_GRACE_MS + 1000);
+            const leftTime = Date.now();
+            recentlyLeftUsers.set(userKey, leftTime);
 
             // 延迟发送离开消息，如果用户在短时间内重新加入则不发送
             setTimeout(() => {
-                // 检查用户是否已经重新加入（通过检查是否还有同名用户在房间）
-                const currentRoom = rooms.get(roomId);
-                if (currentRoom) {
-                    const hasRejoined = Array.from(currentRoom.users.values()).some(u => u.name === user.name);
-                    if (!hasRejoined) {
+                // 检查记录是否还存在（如果用户已重新加入，记录会被删除）
+                const recordedTime = recentlyLeftUsers.get(userKey);
+                if (recordedTime === leftTime) {
+                    // 记录还在，说明用户没有重新加入，发送离开消息
+                    recentlyLeftUsers.delete(userKey);
+                    const currentRoom = rooms.get(roomId);
+                    if (currentRoom) {
                         const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
                         currentRoom.messages.push(systemMsg);
                         if (currentRoom.messages.length > ROOM_HISTORY_LIMIT) currentRoom.messages.shift();
