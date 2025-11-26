@@ -741,10 +741,10 @@
     }
 
     function buildStatusPayload() {
-        const payloadText = buildStatusText();
-        const visible = statusState.isShared && !!payloadText;
+        const visible = !!statusState.isShared;
+        const payloadText = visible ? buildStatusText() : '';
         return {
-            text: visible ? payloadText : '',
+            text: payloadText,
             visible,
             manual: statusState.manualText || '',
             manualPreset: statusState.manualPreset,
@@ -864,7 +864,7 @@
                 statusLine.textContent = langDict[curLang].statusHidden;
             } else {
                 const text = record.status && record.status.text ? record.status.text : '';
-                statusLine.textContent = text || '--';
+                statusLine.textContent = text || '';
             }
             body.appendChild(statusLine);
             item.appendChild(body);
@@ -1036,9 +1036,8 @@
         if (!focusTotalEl) return;
         ensureFocusStatsFresh();
         const total = Math.max(0, focusStats.totalSeconds || 0);
-        const hours = Math.floor(total / 3600).toString().padStart(2, '0');
-        const minutes = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
-        focusTotalEl.textContent = `${hours}:${minutes}`;
+        const totalMinutes = Math.floor(total / 60);
+        focusTotalEl.textContent = `${totalMinutes}分钟`;
     }
 
     function saveFocusStats() {
@@ -1679,13 +1678,17 @@
         notifyCameraStatus(false);
         updateCameraToggleLabel();
         updateRemotePlaceholder();
-        peerConnections.forEach(pc => {
+        peerConnections.forEach((pc, peerId) => {
             pc.getSenders().forEach(sender => {
                 if (sender.track && sender.track.kind === 'video') {
                     try { sender.replaceTrack(null); } catch (_) {}
                     try { pc.removeTrack(sender); } catch (_) {}
                 }
             });
+            // 关闭摄像头后重新添加recvonly占位符，确保仍能接收对方视频
+            const meta = pc.__meta || {};
+            meta.recvonlyVideoTransceiver = null; // 清除旧引用
+            ensureRecvPlaceholder(pc, meta, peerId);
         });
         stopAiMonitor();
         aiStatusEl.textContent = langDict[curLang].aiNeedCamera;
@@ -1697,12 +1700,18 @@
 
     function shouldInitiate(targetId) {
         if (!socket || !socket.id) return true;
-        return socket.id < targetId;
+        const remoteId = typeof targetId === 'string' ? targetId : (targetId ? String(targetId) : '');
+        if (!remoteId) return true;
+        // 使用简单的字符串比较，所有浏览器结果一致
+        return socket.id < remoteId;
     }
 
     function isPolitePeer(targetId) {
         if (!socket || !socket.id) return true;
-        return socket.id > targetId;
+        const remoteId = typeof targetId === 'string' ? targetId : (targetId ? String(targetId) : '');
+        if (!remoteId) return true;
+        // 使用简单的字符串比较，所有浏览器结果一致
+        return socket.id > remoteId;
     }
 
     function ensurePeerConnection(targetId) {
@@ -1716,6 +1725,7 @@
         const meta = {
             makingOffer: false,
             ignoreOffer: false,
+            isSettingRemoteAnswerPending: false,
             polite: isPolitePeer(targetId),
         };
         pc.__meta = meta;
@@ -1762,9 +1772,20 @@
 
         pc.onnegotiationneeded = async () => {
             debugLog('NEGOTIATE', `Negotiation needed for ${targetId}`);
+            // 防止重复触发：如果正在创建 offer 或不在 stable 状态，则跳过
+            if (meta.makingOffer || pc.signalingState !== 'stable') {
+                debugLog('NEGOTIATE', `Skipping negotiation for ${targetId} (already in progress or not stable)`);
+                return;
+            }
             try {
                 meta.makingOffer = true;
                 const offer = await pc.createOffer();
+                // 再次检查状态，防止异步期间状态变化
+                if (pc.signalingState !== 'stable') {
+                    debugLog('NEGOTIATE', `Signaling state changed during offer creation for ${targetId}, aborting`);
+                    meta.makingOffer = false;
+                    return;
+                }
                 await pc.setLocalDescription(offer);
                 debugLog('OFFER', `Created and set local offer for ${targetId}`);
                 socket.emit('rtc-offer', { targetId, sdp: pc.localDescription });
@@ -1783,6 +1804,9 @@
         attachLocalStream(pc).then(attached => {
             if (attached) {
                 debugLog('PEER', `Local stream attached during connection creation for ${targetId}`);
+            } else if (!localStream) {
+                // 没有本地流时，添加recvonly占位符以确保能接收对方视频
+                ensureRecvPlaceholder(pc, meta, targetId);
             }
         });
 
@@ -1807,6 +1831,20 @@
             muted: track.muted
         });
 
+        const meta = pc.__meta || {};
+        // 如果之前有recvonly占位transceiver，升级为sendrecv
+        if (meta.recvonlyVideoTransceiver && meta.recvonlyVideoTransceiver.sender) {
+            debugLog('STREAM', 'Upgrading placeholder transceiver to sendrecv');
+            try {
+                await meta.recvonlyVideoTransceiver.sender.replaceTrack(track);
+                meta.recvonlyVideoTransceiver.direction = 'sendrecv';
+                meta.recvonlyVideoTransceiver = null;
+                return true;
+            } catch (err) {
+                debugLog('ERROR', 'Failed to upgrade transceiver', err.message);
+            }
+        }
+
         const existingSender = pc.getSenders().find(sender => sender.track && sender.track.kind === 'video');
         if (existingSender) {
             if (existingSender.track !== track) {
@@ -1821,6 +1859,19 @@
             debugLog('STREAM', 'Adding new video track to peer connection');
             pc.addTrack(track, localStream);
             return true;
+        }
+    }
+
+    // 确保有recvonly占位transceiver，让没有摄像头的用户也能接收视频
+    function ensureRecvPlaceholder(pc, meta, targetId) {
+        if (!pc || typeof pc.addTransceiver !== 'function') return;
+        const hasActiveSender = pc.getSenders().some(sender => sender.track && sender.track.kind === 'video');
+        if (hasActiveSender || meta.recvonlyVideoTransceiver) return;
+        try {
+            meta.recvonlyVideoTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+            debugLog('PEER', `Added recvonly video transceiver for ${targetId}`);
+        } catch (err) {
+            debugLog('ERROR', `Failed to allocate recvonly transceiver for ${targetId}`, err.message);
         }
     }
 
@@ -1861,9 +1912,20 @@
         const pc = ensurePeerConnection(targetId);
         if (!pc) return;
         const meta = pc.__meta || {};
+        // 添加信令状态检查，防止冲突
+        if (meta.makingOffer || pc.signalingState !== 'stable') {
+            debugLog('OFFER', `Skipping manual offer for ${targetId} (already in progress or not stable)`);
+            return;
+        }
         try {
             meta.makingOffer = true;
             const offer = await pc.createOffer();
+            // 再次检查状态
+            if (pc.signalingState !== 'stable') {
+                debugLog('OFFER', `Signaling state changed during manual offer creation for ${targetId}, aborting`);
+                meta.makingOffer = false;
+                return;
+            }
             await pc.setLocalDescription(offer);
             socket.emit('rtc-offer', { targetId, sdp: pc.localDescription });
         } catch (err) {
@@ -1917,15 +1979,19 @@
             debugLog('ERROR', `No peer connection found for ${from}`);
             return;
         }
+        const meta = pc.__meta || {};
         try {
+            meta.isSettingRemoteAnswerPending = true;
             await pc.setRemoteDescription(new RTCSessionDescription(sdp));
             debugLog('ANSWER', `Set remote description (answer) for ${from}`);
-            if (pc.__meta) pc.__meta.ignoreOffer = false;
             await flushPendingIceCandidates(from, pc);
             attachLocalStream(pc);
         } catch (err) {
             console.error('set answer error', err);
             debugLog('ERROR', `Failed to handle answer from ${from}`, err.message);
+        } finally {
+            meta.isSettingRemoteAnswerPending = false;
+            meta.ignoreOffer = false;
         }
     }
 
