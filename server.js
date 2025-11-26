@@ -6,6 +6,10 @@ const { Server } = require('socket.io');
 const PORT = process.env.PORT || 3000;
 const ROOM_HISTORY_LIMIT = 80;
 const ROOM_TTL_MS = 1000 * 60 * 30; // 30 minutes
+const REJOIN_GRACE_MS = 10000; // 10秒内重新加入不显示加入/离开消息（刷新场景）
+
+// 追踪最近离开的用户，用于检测刷新场景
+const recentlyLeftUsers = new Map(); // key: `${roomId}:${username}`, value: timestamp
 
 const app = express();
 const server = http.createServer(app);
@@ -137,10 +141,19 @@ io.on('connection', (socket) => {
 
         io.to(normalizedRoom).emit('presence', snapshot.participants);
 
-        const systemMsg = createSystemMessage(`${cleanName} joined the room`, cleanName, 'join');
-        room.messages.push(systemMsg);
-        if (room.messages.length > ROOM_HISTORY_LIMIT) room.messages.shift();
-        io.to(normalizedRoom).emit('chat-message', systemMsg);
+        // 检查是否是刷新场景（短时间内同一用户重新加入）
+        const userKey = `${normalizedRoom}:${cleanName}`;
+        const lastLeft = recentlyLeftUsers.get(userKey);
+        const isRejoin = lastLeft && (Date.now() - lastLeft < REJOIN_GRACE_MS);
+        recentlyLeftUsers.delete(userKey); // 清除记录
+
+        // 只有非刷新场景才发送加入消息
+        if (!isRejoin) {
+            const systemMsg = createSystemMessage(`${cleanName} joined the room`, cleanName, 'join');
+            room.messages.push(systemMsg);
+            if (room.messages.length > ROOM_HISTORY_LIMIT) room.messages.shift();
+            io.to(normalizedRoom).emit('chat-message', systemMsg);
+        }
     });
 
     socket.on('send-message', (payload = {}, ack = () => {}) => {
@@ -235,10 +248,30 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('presence', snapshot.participants);
 
         if (user) {
-            const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
-            room.messages.push(systemMsg);
-            if (room.messages.length > ROOM_HISTORY_LIMIT) room.messages.shift();
-            io.to(roomId).emit('chat-message', systemMsg);
+            // 记录用户离开时间，用于检测刷新场景
+            const userKey = `${roomId}:${user.name}`;
+            recentlyLeftUsers.set(userKey, Date.now());
+            // 10秒后清理记录
+            setTimeout(() => {
+                if (recentlyLeftUsers.get(userKey) === Date.now()) {
+                    recentlyLeftUsers.delete(userKey);
+                }
+            }, REJOIN_GRACE_MS + 1000);
+
+            // 延迟发送离开消息，如果用户在短时间内重新加入则不发送
+            setTimeout(() => {
+                // 检查用户是否已经重新加入（通过检查是否还有同名用户在房间）
+                const currentRoom = rooms.get(roomId);
+                if (currentRoom) {
+                    const hasRejoined = Array.from(currentRoom.users.values()).some(u => u.name === user.name);
+                    if (!hasRejoined) {
+                        const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
+                        currentRoom.messages.push(systemMsg);
+                        if (currentRoom.messages.length > ROOM_HISTORY_LIMIT) currentRoom.messages.shift();
+                        io.to(roomId).emit('chat-message', systemMsg);
+                    }
+                }
+            }, REJOIN_GRACE_MS);
         }
 
         scheduleRoomCleanup(roomId);
