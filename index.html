@@ -2289,6 +2289,15 @@
         applyLanguage();
         updatePresenceList([]);
         setChatEnabled(false);
+
+        // 如果有保存的昵称和URL中有房间号，自动加入（刷新页面场景）
+        if (savedName && incomingRoom) {
+            username = savedName;
+            roomId = incomingRoom;
+            updateRoomBadge();
+            joinOverlay.classList.add('hidden');
+            connectSocket();
+        }
     })();
 </script>
 </body>
