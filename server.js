@@ -346,6 +346,14 @@ io.on('connection', (socket) => {
                 pendingLeaveTimers.delete(userKey);
                 const currentRoom = rooms.get(roomId);
                 if (currentRoom) {
+                    // 检查用户是否已经重新加入（同session）
+                    const stillPresent = Array.from(currentRoom.users.values()).some(
+                        (participant) => participant.name === user.name && participant.sessionId === user.sessionId
+                    );
+                    if (stillPresent) {
+                        // 用户已重新连接，不发送离开消息
+                        return;
+                    }
                     const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
                     currentRoom.messages.push(systemMsg);
                     if (currentRoom.messages.length > ROOM_HISTORY_LIMIT) currentRoom.messages.shift();

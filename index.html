@@ -610,8 +610,11 @@
     let collapseRemoteTimeout = null;
     let timerRunning = false;
     let statusBroadcastTimer = null;
+    let clientSessionId = null;
+    let joinInFlight = false;
 
     const FOCUS_STATS_KEY = 'coStudyFocusStats';
+    const SESSION_STORAGE_KEY = 'coStudySessionId';
     const focusTotalEl = document.getElementById('focus-total');
     const focusResetBtn = document.getElementById('focus-reset-btn');
     let focusStats = { date: null, totalSeconds: 0 };
@@ -622,6 +625,26 @@
         if (!DEBUG) return;
         const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
         console.log(`[${timestamp}] [${category}]`, message, data || '');
+    }
+
+    // 获取或创建客户端sessionId
+    function getClientSessionId() {
+        if (clientSessionId) return clientSessionId;
+        try {
+            const stored = localStorage.getItem(SESSION_STORAGE_KEY) || '';
+            if (stored && /^[A-Za-z0-9_-]{8,64}$/.test(stored)) {
+                clientSessionId = stored;
+                return clientSessionId;
+            }
+        } catch (_err) {}
+        const seed = (self.crypto && self.crypto.randomUUID)
+            ? self.crypto.randomUUID()
+            : `cs_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+        clientSessionId = seed.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+        try {
+            localStorage.setItem(SESSION_STORAGE_KEY, clientSessionId);
+        } catch (_err) {}
+        return clientSessionId;
     }
 
     function applyLanguage() {
@@ -1399,6 +1422,7 @@
 
     function handleJoinSubmit(e) {
         e.preventDefault();
+        if (joinInFlight) return;
         const name = joinNameInput.value.trim();
         const targetRoom = (joinRoomInput.value.trim() || generateRoomCode()).toUpperCase();
         if (!name) {
@@ -1421,17 +1445,30 @@
     }
 
     function connectSocket() {
+        if (joinInFlight) return;
+        if (!roomId || !username) {
+            showJoinError(langDict[curLang].joinFailed);
+            joinOverlay.classList.remove('hidden');
+            return;
+        }
+        joinInFlight = true;
+        const sessionId = getClientSessionId();
         if (!window.io) {
+            joinInFlight = false;
             showJoinError(langDict[curLang].serviceError);
             joinOverlay.classList.remove('hidden');
             return;
         }
         if (socket) socket.disconnect();
         socket = io();
-        socket.on('connect_error', () => {
+        const failJoin = (message) => {
+            joinInFlight = false;
             setChatEnabled(false);
-            showJoinError(langDict[curLang].connectError);
+            showJoinError(message);
             joinOverlay.classList.remove('hidden');
+        };
+        socket.on('connect_error', () => {
+            failJoin(langDict[curLang].connectError);
         });
         socket.on('chat-message', msg => appendMessage(msg));
         socket.on('presence', list => updatePresenceList(list || []));
@@ -1439,7 +1476,7 @@
         socket.on('camera-status', handleCameraStatusEvent);
         socket.on('rtc-offer', handleIncomingOffer);
         socket.on('rtc-answer', handleIncomingAnswer);
-    socket.on('rtc-ice', handleIncomingIce);
+        socket.on('rtc-ice', handleIncomingIce);
         socket.on('disconnect', () => {
             setChatEnabled(false);
             appendMessage({ type: 'system', text: langDict[curLang].disconnectMsg });
@@ -1448,11 +1485,10 @@
             pendingIceCandidates.clear();
             clearRemoteStream();
         });
-        socket.emit('join-room', { roomId, username }, (res) => {
+        socket.emit('join-room', { roomId, username, sessionId }, (res) => {
+            joinInFlight = false;
             if (!res || !res.ok) {
-                setChatEnabled(false);
-                showJoinError((res && res.error) || langDict[curLang].joinFailed);
-                joinOverlay.classList.remove('hidden');
+                failJoin((res && res.error) || langDict[curLang].joinFailed);
                 return;
             }
             showJoinError('');
