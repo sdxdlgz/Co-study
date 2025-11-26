@@ -6,10 +6,9 @@ const { Server } = require('socket.io');
 const PORT = process.env.PORT || 3000;
 const ROOM_HISTORY_LIMIT = 80;
 const ROOM_TTL_MS = 1000 * 60 * 30; // 30 minutes
-const REJOIN_GRACE_MS = 10000; // 10秒内重新加入不显示加入/离开消息（刷新场景）
 
-// 追踪最近离开的用户，用于检测刷新场景
-const recentlyLeftUsers = new Map(); // key: `${roomId}:${username}`, value: timestamp
+// 追踪待发送的离开消息定时器，用于取消
+const pendingLeaveTimers = new Map(); // key: `${roomId}:${username}`, value: timeoutId
 
 const app = express();
 const server = http.createServer(app);
@@ -124,18 +123,26 @@ io.on('connection', (socket) => {
         }
 
         const room = ensureRoom(normalizedRoom);
-
-        // 检查是否是刷新场景（同名用户短时间内重新加入）
         const userKey = `${normalizedRoom}:${cleanName}`;
-        const lastLeft = recentlyLeftUsers.get(userKey);
-        const isRejoin = lastLeft && (Date.now() - lastLeft < REJOIN_GRACE_MS);
-        recentlyLeftUsers.delete(userKey);
 
-        // 检查房间内是否已有同名用户（非刷新场景）
-        if (!isRejoin) {
-            const existingUser = Array.from(room.users.values()).find(u => u.name === cleanName);
-            if (existingUser) {
-                return ack({ ok: false, error: '该昵称已被使用，请换一个' });
+        // 检查是否有待发送的离开消息，如果有则取消（说明是刷新）
+        const pendingTimer = pendingLeaveTimers.get(userKey);
+        const isRejoin = !!pendingTimer;
+        if (pendingTimer) {
+            clearTimeout(pendingTimer);
+            pendingLeaveTimers.delete(userKey);
+        }
+
+        // 踢掉同名的旧连接（处理高速刷新的情况）
+        const existingUser = Array.from(room.users.entries()).find(([id, u]) => u.name === cleanName);
+        if (existingUser) {
+            const [oldSocketId] = existingUser;
+            room.users.delete(oldSocketId);
+            // 通知旧socket断开
+            const oldSocket = io.sockets.sockets.get(oldSocketId);
+            if (oldSocket) {
+                oldSocket.leave(normalizedRoom);
+                oldSocket.data.roomId = null; // 防止disconnect时再次处理
             }
         }
 
@@ -149,7 +156,6 @@ io.on('connection', (socket) => {
 
         socket.data.username = cleanName;
         socket.data.roomId = normalizedRoom;
-        socket.data.isRejoin = isRejoin; // 标记是否是刷新场景
         socket.join(normalizedRoom);
 
         const snapshot = roomSnapshot(normalizedRoom);
@@ -258,27 +264,21 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('presence', snapshot.participants);
 
         if (user) {
-            // 记录用户离开时间，用于检测刷新场景
             const userKey = `${roomId}:${user.name}`;
-            const leftTime = Date.now();
-            recentlyLeftUsers.set(userKey, leftTime);
 
-            // 延迟发送离开消息，如果用户在短时间内重新加入则不发送
-            setTimeout(() => {
-                // 检查记录是否还存在（如果用户已重新加入，记录会被删除）
-                const recordedTime = recentlyLeftUsers.get(userKey);
-                if (recordedTime === leftTime) {
-                    // 记录还在，说明用户没有重新加入，发送离开消息
-                    recentlyLeftUsers.delete(userKey);
-                    const currentRoom = rooms.get(roomId);
-                    if (currentRoom) {
-                        const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
-                        currentRoom.messages.push(systemMsg);
-                        if (currentRoom.messages.length > ROOM_HISTORY_LIMIT) currentRoom.messages.shift();
-                        io.to(roomId).emit('chat-message', systemMsg);
-                    }
+            // 延迟3秒发送离开消息，如果用户在这期间重新加入则取消
+            const timerId = setTimeout(() => {
+                pendingLeaveTimers.delete(userKey);
+                const currentRoom = rooms.get(roomId);
+                if (currentRoom) {
+                    const systemMsg = createSystemMessage(`${user.name} left the room`, user.name, 'leave');
+                    currentRoom.messages.push(systemMsg);
+                    if (currentRoom.messages.length > ROOM_HISTORY_LIMIT) currentRoom.messages.shift();
+                    io.to(roomId).emit('chat-message', systemMsg);
                 }
-            }, REJOIN_GRACE_MS);
+            }, 3000);
+
+            pendingLeaveTimers.set(userKey, timerId);
         }
 
         scheduleRoomCleanup(roomId);
