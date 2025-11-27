@@ -28,6 +28,9 @@ app.use(express.json());
 // 静态文件服务 - 音频文件
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
+// 静态文件服务 - 图片文件
+app.use('/images', express.static(path.join(__dirname, 'images')));
+
 const rooms = new Map();
 
 function normalizeRoom(roomId = '') {
