@@ -45,17 +45,48 @@ sudo pm2 save
 sudo pm2 startup
 ```
 
-#### 3. Configure Nginx Reverse Proxy
+#### 3. Configure Nginx (HTTP only first)
 
 ```bash
-# Copy nginx config
-sudo cp nginx.conf /etc/nginx/sites-available/co-study
+# Create a simple HTTP config first (certbot will add SSL later)
+sudo tee /etc/nginx/sites-available/co-study << 'EOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.com;  # Replace with your domain
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+EOF
 
 # Edit config file, replace your-domain.com with your actual domain
 sudo nano /etc/nginx/sites-available/co-study
 
 # Create symlink
 sudo ln -s /etc/nginx/sites-available/co-study /etc/nginx/sites-enabled/
+
+# Remove default site (optional)
+sudo rm -f /etc/nginx/sites-enabled/default
 
 # Test configuration
 sudo nginx -t
@@ -67,11 +98,15 @@ sudo systemctl restart nginx
 #### 4. Configure SSL Certificate (Let's Encrypt)
 
 ```bash
-# Request SSL certificate for your domain
+# Request SSL certificate - certbot will automatically update Nginx config
 sudo certbot --nginx -d your-domain.com
 
-# Certbot will automatically configure Nginx and enable HTTPS
-# Certificate will auto-renew
+# Certbot will:
+# 1. Obtain the SSL certificate
+# 2. Automatically modify your Nginx config to add SSL
+# 3. Set up auto-renewal
+
+# Certificate will auto-renew via systemd timer
 ```
 
 #### 5. Firewall Configuration
@@ -201,17 +236,48 @@ sudo pm2 save
 sudo pm2 startup
 ```
 
-#### 3. 配置 Nginx 反向代理
+#### 3. 配置 Nginx（先配置 HTTP）
 
 ```bash
-# 复制 nginx 配置
-sudo cp nginx.conf /etc/nginx/sites-available/co-study
+# 先创建 HTTP 配置（certbot 会自动添加 SSL）
+sudo tee /etc/nginx/sites-available/co-study << 'EOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.com;  # 替换为你的域名
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+EOF
 
 # 编辑配置文件，替换 your-domain.com 为你的实际域名
 sudo nano /etc/nginx/sites-available/co-study
 
 # 创建软链接
 sudo ln -s /etc/nginx/sites-available/co-study /etc/nginx/sites-enabled/
+
+# 删除默认站点（可选）
+sudo rm -f /etc/nginx/sites-enabled/default
 
 # 测试配置
 sudo nginx -t
@@ -223,11 +289,15 @@ sudo systemctl restart nginx
 #### 4. 配置 SSL 证书 (Let's Encrypt)
 
 ```bash
-# 为你的域名申请 SSL 证书
+# 申请 SSL 证书 - certbot 会自动更新 Nginx 配置
 sudo certbot --nginx -d your-domain.com
 
-# Certbot 会自动配置 Nginx 并启用 HTTPS
-# 证书会自动续期
+# Certbot 会自动完成：
+# 1. 获取 SSL 证书
+# 2. 自动修改 Nginx 配置添加 SSL
+# 3. 设置自动续期
+
+# 证书会通过 systemd timer 自动续期
 ```
 
 #### 5. 防火墙配置

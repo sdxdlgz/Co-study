@@ -438,7 +438,6 @@
                 <div class="cam-placeholder" data-lang="camMe">My Camera</div>
                 <div class="cam-controls">
                     <button class="cam-btn" id="camera-toggle">开启摄像头</button>
-                    <button class="cam-btn" id="screen-toggle" style="display:none;">屏幕共享(测试)</button>
                 </div>
             </div>
             <div class="cam-feed" id="remote-cam">
@@ -556,7 +555,6 @@
     const localVideo = document.getElementById('local-video');
     const remoteGrid = document.getElementById('remote-grid');
     const cameraToggleBtn = document.getElementById('camera-toggle');
-    const screenToggleBtn = document.getElementById('screen-toggle');
     const remotePlaceholder = document.getElementById('remote-placeholder');
     const remoteStatusEl = document.getElementById('remote-status');
     const remoteNameLabel = document.getElementById('remote-name');
@@ -1577,65 +1575,6 @@
         cameraToggleBtn.addEventListener('click', e => {
             e.preventDefault();
             toggleCamera();
-        });
-    }
-
-    // 屏幕共享按钮(用于单机测试)
-    if (screenToggleBtn) {
-        screenToggleBtn.style.display = 'inline-block';
-        screenToggleBtn.addEventListener('click', async e => {
-            e.preventDefault();
-            if (cameraEnabled) {
-                disableCamera();
-                return;
-            }
-            updateCameraToggleLabel('loading');
-            try {
-                debugLog('SCREEN', 'Requesting screen share...');
-                localStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: {
-                        cursor: "always"
-                    },
-                    audio: false
-                });
-                cameraEnabled = true;
-
-                const track = localStream.getVideoTracks()[0];
-                debugLog('SCREEN', 'Screen share enabled', {
-                    streamId: localStream.id,
-                    tracks: localStream.getTracks().length,
-                    trackId: track.id,
-                    trackEnabled: track.enabled,
-                    trackMuted: track.muted,
-                    trackReadyState: track.readyState
-                });
-
-                localVideo.srcObject = localStream;
-                localVideo.style.display = 'block';
-                updateRemotePlaceholder();
-                updateCameraToggleLabel();
-                notifyCameraStatus(true);
-
-                // 监听屏幕共享停止事件
-                track.onended = () => {
-                    debugLog('SCREEN', 'Screen share stopped by user');
-                    disableCamera();
-                };
-
-                debugLog('SCREEN', `Attaching screen share to ${peerConnections.size} peer(s)`);
-                for (const [peerId, pc] of peerConnections.entries()) {
-                    debugLog('SCREEN', `Attaching to peer ${peerId}`);
-                    const attached = await attachLocalStream(pc);
-                    if (attached) {
-                        debugLog('SCREEN', `Successfully attached screen share to ${peerId}`);
-                    }
-                }
-            } catch (err) {
-                debugLog('ERROR', 'Screen share failed', err.message);
-                cameraEnabled = false;
-                updateCameraToggleLabel();
-                alert('屏幕共享失败: ' + err.message);
-            }
         });
     }
 
