@@ -161,12 +161,24 @@ pm2 logs co-study
 
 # Restart application
 pm2 restart co-study
+```
 
-# Update code
+### Update to Latest Version
+
+```bash
 cd /var/www/Co-study
+
+# Pull latest code from GitHub
 sudo git pull
+
+# Install any new dependencies
 sudo npm install
+
+# Restart the application
 pm2 restart co-study
+
+# Verify it's running
+pm2 status
 ```
 
 ### Domain Configuration
@@ -352,12 +364,24 @@ pm2 logs co-study
 
 # 重启应用
 pm2 restart co-study
+```
 
-# 更新代码
+### 更新到最新版本
+
+```bash
 cd /var/www/Co-study
+
+# 从 GitHub 拉取最新代码
 sudo git pull
+
+# 安装新依赖（如有）
 sudo npm install
+
+# 重启应用
 pm2 restart co-study
+
+# 确认运行状态
+pm2 status
 ```
 
 ### 域名配置
