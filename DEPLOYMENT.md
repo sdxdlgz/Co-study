@@ -14,8 +14,8 @@
 # Update system
 sudo apt update && sudo apt upgrade -y
 
-# Install Node.js (18.x or higher recommended)
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# Install Node.js LTS
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Install PM2 (process manager)
@@ -170,8 +170,8 @@ pm2 restart co-study
 # 更新系统
 sudo apt update && sudo apt upgrade -y
 
-# 安装 Node.js (推荐 18.x 或更高版本)
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# 安装 Node.js LTS
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # 安装 PM2 (进程管理器)
