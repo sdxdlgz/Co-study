@@ -1,15 +1,54 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const { Server } = require('socket.io');
+const selfsigned = require('selfsigned');
+
+// 密码哈希 - 使用内置 crypto 模块实现 PBKDF2 哈希
+const HASH_ITERATIONS = 100000;
+const HASH_KEY_LENGTH = 64;
+const HASH_DIGEST = 'sha512';
+
+async function hashPassword(password) {
+    return new Promise((resolve, reject) => {
+        const salt = crypto.randomBytes(16).toString('hex');
+        crypto.pbkdf2(password, salt, HASH_ITERATIONS, HASH_KEY_LENGTH, HASH_DIGEST, (err, key) => {
+            if (err) return reject(err);
+            resolve(`${salt}:${key.toString('hex')}`);
+        });
+    });
+}
+
+async function verifyPassword(password, hash) {
+    return new Promise((resolve, reject) => {
+        if (!hash || !hash.includes(':')) return resolve(false);
+        const [salt, key] = hash.split(':');
+        crypto.pbkdf2(password, salt, HASH_ITERATIONS, HASH_KEY_LENGTH, HASH_DIGEST, (err, derivedKey) => {
+            if (err) return reject(err);
+            const derivedKeyHex = derivedKey.toString('hex');
+            const keyBuffer = Buffer.from(key, 'hex');
+            const derivedBuffer = Buffer.from(derivedKeyHex, 'hex');
+            if (keyBuffer.length !== derivedBuffer.length) {
+                return resolve(false);
+            }
+            resolve(crypto.timingSafeEqual(keyBuffer, derivedBuffer));
+        });
+    });
+}
 
 const PORT = process.env.PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
 const ROOM_HISTORY_LIMIT = 80;
 const ROOM_TTL_MS = 1000 * 60 * 30; // 30 minutes
 const SESSION_COOKIE_NAME = 'coStudySessionId';
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 const CLIENT_ID_MAX_LENGTH = 64;
+const ROOM_CODE_LENGTH = 6;
+const ROOM_NAME_MAX_LENGTH = 48;
+const ROOM_PASSWORD_MAX_LENGTH = 64;
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 // 追踪待发送的离开消息定时器，用于取消
 // key: `${roomId}:${username}`, value: { timeoutId, sessionId, clientId }
@@ -19,10 +58,61 @@ const pendingLeaveTimers = new Map();
 const skippedDisconnects = new Set();
 
 const app = express();
-const server = http.createServer(app);
+
+// 生成自签名证书
+console.log('Generating self-signed certificate...');
+const attrs = [{ name: 'commonName', value: 'localhost' }];
+const pems = selfsigned.generate(attrs, {
+    algorithm: 'sha256',
+    days: 365,
+    keySize: 2048,
+    extensions: [
+        { name: 'basicConstraints', cA: true },
+        {
+            name: 'subjectAltName',
+            altNames: [
+                { type: 2, value: 'localhost' },
+                { type: 7, ip: '127.0.0.1' }
+            ]
+        }
+    ]
+});
+
+const httpsOptions = {
+    key: pems.private,
+    cert: pems.cert
+};
+
+const server = https.createServer(httpsOptions, app);
 const io = new Server(server);
 
 const rooms = new Map();
+
+// 房间名称和密码清理函数
+function sanitizeRoomName(raw = '') {
+    if (typeof raw !== 'string') return '';
+    return raw.trim().slice(0, ROOM_NAME_MAX_LENGTH);
+}
+
+function sanitizeRoomPassword(raw = '') {
+    if (typeof raw !== 'string') return '';
+    return raw.trim().slice(0, ROOM_PASSWORD_MAX_LENGTH);
+}
+
+// 生成唯一房间代码
+function generateRoomCode(length = ROOM_CODE_LENGTH) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+        let code = '';
+        for (let i = 0; i < length; i++) {
+            code += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
+        }
+        const normalized = normalizeRoom(code);
+        if (normalized && !rooms.has(normalized)) {
+            return normalized;
+        }
+    }
+    return crypto.randomUUID().replace(/[^A-Z0-9]/gi, '').slice(0, length).toUpperCase();
+}
 
 // 构建身份索引键
 function buildIdentityKey(roomId, sessionId, clientId) {
@@ -135,16 +225,32 @@ function normalizeRoom(roomId = '') {
     return roomId.trim().toUpperCase();
 }
 
-function ensureRoom(roomId) {
+function ensureRoom(roomId, meta = {}) {
     const normalized = normalizeRoom(roomId);
     if (!normalized) return null;
     if (!rooms.has(normalized)) {
-        rooms.set(normalized, { users: new Map(), messages: [], identities: new Map(), cleanupTimer: null });
+        rooms.set(normalized, {
+            id: normalized,
+            name: meta.name || normalized,
+            requirePassword: !!meta.requirePassword,
+            passwordHash: meta.passwordHash || null,
+            createdAt: meta.createdAt || Date.now(),
+            users: new Map(),
+            messages: [],
+            identities: new Map(),
+            cleanupTimer: null
+        });
     }
     const room = rooms.get(normalized);
     // 兼容旧房间数据
     if (!room.identities) {
         room.identities = new Map();
+    }
+    if (typeof room.name !== 'string') {
+        room.name = normalized;
+    }
+    if (typeof room.requirePassword !== 'boolean') {
+        room.requirePassword = !!room.passwordHash;
     }
     if (room.cleanupTimer) {
         clearTimeout(room.cleanupTimer);
@@ -157,10 +263,12 @@ function roomSnapshot(roomId) {
     const normalized = normalizeRoom(roomId);
     const room = rooms.get(normalized);
     if (!room) {
-        return { roomId: normalized, participants: [], messages: [] };
+        return { roomId: normalized, name: normalized, requirePassword: false, participants: [], messages: [] };
     }
     return {
         roomId: normalized,
+        name: room.name || normalized,
+        requirePassword: !!room.requirePassword,
         participants: Array.from(room.users.values()).map((user) => ({
             id: user.socketId,
             name: user.name,
@@ -220,6 +328,10 @@ app.get('/api/rooms/:roomId', (req, res) => {
 });
 
 app.get('/', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'landing.html'));
+});
+
+app.get(['/index.html', '/study', '/workspace', '/room'], (_req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
@@ -233,8 +345,50 @@ io.on('connection', (socket) => {
     socket.data.sessionId = sessionId;
     socket.data.clientId = handshakeClientId || sessionId;
 
-    socket.on('join-room', (payload = {}, ack = () => {}) => {
-        const { roomId, username, clientId: payloadClientId } = payload;
+    // 创建房间事件
+    socket.on('create-room', async (payload = {}, ack = () => {}) => {
+        const { roomName, password, requirePassword } = payload;
+        const cleanName = sanitizeRoomName(roomName);
+
+        if (!cleanName) {
+            return ack({ ok: false, error: '房间名称不能为空' });
+        }
+
+        const roomCode = generateRoomCode();
+        if (!roomCode || rooms.has(roomCode)) {
+            return ack({ ok: false, error: '无法生成房间代码，请重试' });
+        }
+
+        const sanitizedPassword = sanitizeRoomPassword(password);
+        const shouldProtect = !!requirePassword && sanitizedPassword.length > 0;
+        let passwordHash = null;
+
+        if (shouldProtect) {
+            try {
+                passwordHash = await hashPassword(sanitizedPassword);
+            } catch (err) {
+                console.error('Password hash failed:', err);
+                return ack({ ok: false, error: '密码处理失败' });
+            }
+        }
+
+        ensureRoom(roomCode, {
+            name: cleanName,
+            requirePassword: shouldProtect,
+            passwordHash,
+            createdAt: Date.now()
+        });
+
+        scheduleRoomCleanup(roomCode);
+
+        return ack({
+            ok: true,
+            room: { roomId: roomCode, code: roomCode, name: cleanName, requirePassword: shouldProtect }
+        });
+    });
+
+    socket.on('join-room', async (payload = {}, ack = () => {}) => {
+        const { roomId, username, clientId: payloadClientId, password } = payload;
         const cleanName = (username || '').trim();
         const normalizedRoom = normalizeRoom(roomId);
         const clientId = resolveClientId(socket, payloadClientId);
@@ -247,6 +401,27 @@ io.on('connection', (socket) => {
         }
 
         const room = ensureRoom(normalizedRoom);
+
+        // 密码验证
+        if (room.requirePassword) {
+            const providedPassword = sanitizeRoomPassword(password);
+            if (!providedPassword) {
+                return ack({ ok: false, error: '该自习室需要密码' });
+            }
+            if (!room.passwordHash) {
+                return ack({ ok: false, error: '房间密码配置异常' });
+            }
+            try {
+                const isValid = await verifyPassword(providedPassword, room.passwordHash);
+                if (!isValid) {
+                    return ack({ ok: false, error: '密码错误' });
+                }
+            } catch (err) {
+                console.error('Password verification failed:', err);
+                return ack({ ok: false, error: '密码验证失败' });
+            }
+        }
+
         let isRejoin = false;
 
         // 首先通过身份索引回收同一身份的旧连接（核心：解决快速刷新问题）
@@ -483,6 +658,7 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`Co-Study backend listening on http://localhost:${PORT}`);
+server.listen(HTTPS_PORT, () => {
+    console.log(`Co-Study backend listening on https://localhost:${HTTPS_PORT}`);
+    console.log('Note: This uses a self-signed certificate. You may need to accept the security warning in your browser.');
 });

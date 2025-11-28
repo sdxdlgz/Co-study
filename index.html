@@ -346,6 +346,8 @@
         <input type="text" id="join-name" class="join-input" maxlength="20" data-lang-placeholder="joinNamePlaceholder" placeholder="Name shown to others">
         <label class="join-label" for="join-room" data-lang="joinRoom">Room code</label>
         <input type="text" id="join-room" class="join-input" maxlength="10" data-lang-placeholder="joinRoomPlaceholder" placeholder="e.g. ABC123">
+        <label class="join-label" for="join-password" data-lang="joinPassword">Room password (if required)</label>
+        <input type="password" id="join-password" class="join-input" maxlength="64" data-lang-placeholder="joinPasswordPlaceholder" placeholder="Leave empty if no password">
         <div class="join-error" id="join-error"></div>
         <button class="join-submit" type="submit" data-lang="joinButton">Enter room</button>
     </form>
@@ -536,7 +538,7 @@
         document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
     }
 
-    const langDict = JSON.parse('{"cn": {"todoTitle": "\u5f85\u529e\u6e05\u5355", "chatTitle": "\u804a\u5929\u5ba4", "noiseTitle": "\u73af\u5883\u97f3", "camMe": "\u6211\u7684\u955c\u5934", "camPeer": "\u540c\u4f34\u955c\u5934", "aiMonitor": "AI \u667a\u80fd\u76d1\u7763", "focusMode": "\u4e13\u6ce8\u6a21\u5f0f", "breakMode": "\u4f11\u606f\u6a21\u5f0f", "todoPlaceholder": "\u6dfb\u52a0\u5f85\u529e...", "chatPlaceholder": "\u8f93\u5165\u6d88\u606f...", "timerSet": "\u4e13\u6ce8", "timerBreak": "\u4f11\u606f", "noiseRain": "\u96e8\u58f0", "noiseForest": "\u68ee\u6797", "noiseFire": "\u7bdd\u706b", "noiseCafe": "\u5496\u5561\u9986", "joinTitle": "\u52a0\u5165\u5171\u540c\u5b66\u4e60\u7a7a\u95f4", "joinSubtitle": "\u8f93\u5165\u60a8\u7684\u6635\u79f0\u548c\u623f\u95f4\u4ee3\u7801\uff0c\u5f00\u59cb\u96c6\u4e2d\u6ce8\u610f\u529b\u3002", "joinName": "\u4f60\u7684\u6635\u79f0", "joinNamePlaceholder": "\u5411\u4ed6\u4eba\u663e\u793a\u7684\u540d\u5b57", "joinRoom": "\u623f\u95f4\u4ee3\u7801", "joinRoomPlaceholder": "\u4f8b\u5982 ABC123", "joinButton": "\u8fdb\u5165\u623f\u95f4", "roomLabel": "\u623f\u95f4", "onlineLabel": "\u5728\u7ebf", "presenceEmpty": "\u7b49\u5f85\u5c0f\u4f19\u4f34\u52a0\u5165...", "chatEmpty": "\u804a\u5929\u5185\u5bb9\u5c06\u5728\u8fd9\u91cc\u663e\u793a", "shareSuccess": "\u623f\u95f4\u94fe\u63a5\u5df2\u590d\u5236\uff01", "shareFallback": "\u590d\u5236\u6b64\u94fe\u63a5\u5e76\u5206\u4eab", "disconnectMsg": "\u8fde\u63a5\u4e22\u5931\uff0c\u6b63\u5728\u5c1d\u8bd5\u91cd\u65b0\u8fde\u63a5...", "joinNameError": "\u8bf7\u8f93\u5165\u6635\u79f0", "serviceError": "\u5b9e\u65f6\u670d\u52a1\u4e0d\u53ef\u7528", "connectError": "\u8fde\u63a5\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5", "joinFailed": "\u65e0\u6cd5\u52a0\u5165\uff0c\u8bf7\u91cd\u8bd5", "remoteWaiting": "\u7b49\u5f85\u540c\u4f34\u5f00\u542f\u6444\u50cf\u5934", "remoteOffline": "\u5bf9\u65b9\u6444\u50cf\u5934\u5df2\u5173\u95ed", "cameraToggleOn": "\u5f00\u542f\u6444\u50cf\u5934", "cameraToggleOff": "\u5173\u95ed\u6444\u50cf\u5934", "cameraToggleStarting": "\u6b63\u5728\u5f00\u542f...", "cameraError": "\u65e0\u6cd5\u8bbf\u95ee\u6444\u50cf\u5934", "aiReady": "AI \u51c6\u5907\u5c31\u7eea", "aiFocused": "\u72b6\u6001\uff1a\u4e13\u6ce8", "aiAway": "\u72b6\u6001\uff1a\u53ef\u80fd\u79bb\u5e2d", "aiNeedCamera": "\u5f00\u542f\u6444\u50cf\u5934\u4ee5\u542f\u7528 AI \u76d1\u7763", "aiUnsupported": "AI \u529f\u80fd\u6682\u4e0d\u652f\u6301\u5f53\u524d\u6d4f\u89c8\u5668", "userListTitle": "\u623f\u95f4\u6210\u5458", "myStatus": "\u6211\u7684\u72b6\u6001", "statusFocus": "\u4e13\u6ce8\u4e2d", "statusBreak": "\u4f11\u606f\u4e2d", "statusStudying": "\u5b66\u4e60\u4e2d", "statusWorking": "\u5de5\u4f5c\u4e2d", "statusMeal": "\u5403\u996d\u4e2d", "statusAway": "\u6682\u65f6\u79bb\u5f00", "statusAutoSync": "\ud83d\udd04 \u8ddf\u968f\u8ba1\u65f6\u5668", "statusShare": "\ud83d\udd12 \u4e0e\u623f\u95f4\u5171\u4eab", "statusCustomPlaceholder": "\u81ea\u5b9a\u4e49\u72b6\u6001...", "ambientSound": "\u73af\u5883\u97f3", "ambientTitle": "\u9009\u62e9\u73af\u5883\u97f3", "ambientShowStatus": "\u540c\u6b65\u5230\u72b6\u6001", "ambientVolume": "\u97f3\u91cf", "soundRain": "\u96e8\u58f0", "soundForest": "\u68ee\u6797", "soundFire": "\u7bdd\u706b", "soundCafe": "\u5496\u5561\u9986", "soundOcean": "\u6d77\u6d6a", "soundNone": "\u5173\u95ed", "soundListening": "\u8046\u542c", "videoCollapsedBanner": "\u6682\u65e0\u89c6\u9891\u6d41", "statusHidden": "\u672a\u5206\u4eab", "userJoined": "\u52a0\u5165\u4e86\u623f\u95f4", "userLeft": "\u79bb\u5f00\u4e86\u623f\u95f4", "focusTodayLabel": "\u4eca\u65e5\u4e13\u6ce8", "focusReset": "\u91cd\u7f6e"}, "en": {"todoTitle": "To-Do List", "chatTitle": "Chat Room", "noiseTitle": "Ambience", "camMe": "My Camera", "camPeer": "Peer Camera", "aiMonitor": "AI Focus Monitor", "focusMode": "Focus Mode", "breakMode": "Break Mode", "todoPlaceholder": "Add task...", "chatPlaceholder": "Type a message...", "timerSet": "Focus", "timerBreak": "Break", "noiseRain": "Rain", "noiseForest": "Forest", "noiseFire": "Fire", "noiseCafe": "Cafe", "joinTitle": "Join the co-study space", "joinSubtitle": "Enter your nickname and room code to start focusing together.", "joinName": "Your nickname", "joinNamePlaceholder": "Name shown to others", "joinRoom": "Room code", "joinRoomPlaceholder": "e.g. ABC123", "joinButton": "Enter room", "roomLabel": "Room", "onlineLabel": "Online", "presenceEmpty": "Waiting for friends to join...", "chatEmpty": "Messages will appear here", "shareSuccess": "Room link copied!", "shareFallback": "Copy this link and share it", "disconnectMsg": "Connection lost, attempting to reconnect...", "joinNameError": "Please enter a nickname", "serviceError": "Realtime service is unavailable", "connectError": "Connection failed, try again soon", "joinFailed": "Unable to join, please try again", "remoteWaiting": "Waiting for your buddy to enable camera", "remoteOffline": "Peer camera is offline", "cameraToggleOn": "Enable camera", "cameraToggleOff": "Disable camera", "cameraToggleStarting": "Starting...", "cameraError": "Unable to access the camera", "aiReady": "AI ready", "aiFocused": "Status: Focused", "aiAway": "Status: Possibly away", "aiNeedCamera": "Turn on the camera to enable AI monitoring", "aiUnsupported": "AI requires a newer browser", "userListTitle": "Room Members", "myStatus": "My Status", "statusFocus": "Focusing", "statusBreak": "On break", "statusStudying": "Studying", "statusWorking": "Working", "statusMeal": "Meal break", "statusAway": "Away", "statusAutoSync": "\ud83d\udd04 Auto sync with timer", "statusShare": "\ud83d\udd12 Share with room", "statusCustomPlaceholder": "Custom status...", "ambientSound": "Ambient", "ambientTitle": "Choose ambient sound", "ambientShowStatus": "Show in status", "ambientVolume": "Volume", "soundRain": "Rain", "soundForest": "Forest", "soundFire": "Fire", "soundCafe": "Cafe", "soundOcean": "Ocean", "soundNone": "Off", "soundListening": "Listening to", "videoCollapsedBanner": "No video stream", "statusHidden": "Not shared", "userJoined": "joined the room", "userLeft": "left the room", "focusTodayLabel": "Today\'s Focus", "focusReset": "Reset"}}');
+    const langDict = JSON.parse('{"cn": {"todoTitle": "\u5f85\u529e\u6e05\u5355", "chatTitle": "\u804a\u5929\u5ba4", "noiseTitle": "\u73af\u5883\u97f3", "camMe": "\u6211\u7684\u955c\u5934", "camPeer": "\u540c\u4f34\u955c\u5934", "aiMonitor": "AI \u667a\u80fd\u76d1\u7763", "focusMode": "\u4e13\u6ce8\u6a21\u5f0f", "breakMode": "\u4f11\u606f\u6a21\u5f0f", "todoPlaceholder": "\u6dfb\u52a0\u5f85\u529e...", "chatPlaceholder": "\u8f93\u5165\u6d88\u606f...", "timerSet": "\u4e13\u6ce8", "timerBreak": "\u4f11\u606f", "noiseRain": "\u96e8\u58f0", "noiseForest": "\u68ee\u6797", "noiseFire": "\u7bdd\u706b", "noiseCafe": "\u5496\u5561\u9986", "joinTitle": "\u52a0\u5165\u5171\u540c\u5b66\u4e60\u7a7a\u95f4", "joinSubtitle": "\u8f93\u5165\u60a8\u7684\u6635\u79f0\u548c\u623f\u95f4\u4ee3\u7801\uff0c\u5f00\u59cb\u96c6\u4e2d\u6ce8\u610f\u529b\u3002", "joinName": "\u4f60\u7684\u6635\u79f0", "joinNamePlaceholder": "\u5411\u4ed6\u4eba\u663e\u793a\u7684\u540d\u5b57", "joinRoom": "\u623f\u95f4\u4ee3\u7801", "joinRoomPlaceholder": "\u4f8b\u5982 ABC123", "joinPassword": "\u623f\u95f4\u5bc6\u7801\uff08\u5982\u9700\u8981\uff09", "joinPasswordPlaceholder": "\u65e0\u5bc6\u7801\u5219\u7559\u7a7a", "joinButton": "\u8fdb\u5165\u623f\u95f4", "roomLabel": "\u623f\u95f4", "onlineLabel": "\u5728\u7ebf", "presenceEmpty": "\u7b49\u5f85\u5c0f\u4f19\u4f34\u52a0\u5165...", "chatEmpty": "\u804a\u5929\u5185\u5bb9\u5c06\u5728\u8fd9\u91cc\u663e\u793a", "shareSuccess": "\u623f\u95f4\u94fe\u63a5\u5df2\u590d\u5236\uff01", "shareFallback": "\u590d\u5236\u6b64\u94fe\u63a5\u5e76\u5206\u4eab", "disconnectMsg": "\u8fde\u63a5\u4e22\u5931\uff0c\u6b63\u5728\u5c1d\u8bd5\u91cd\u65b0\u8fde\u63a5...", "joinNameError": "\u8bf7\u8f93\u5165\u6635\u79f0", "serviceError": "\u5b9e\u65f6\u670d\u52a1\u4e0d\u53ef\u7528", "connectError": "\u8fde\u63a5\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5", "joinFailed": "\u65e0\u6cd5\u52a0\u5165\uff0c\u8bf7\u91cd\u8bd5", "remoteWaiting": "\u7b49\u5f85\u540c\u4f34\u5f00\u542f\u6444\u50cf\u5934", "remoteOffline": "\u5bf9\u65b9\u6444\u50cf\u5934\u5df2\u5173\u95ed", "cameraToggleOn": "\u5f00\u542f\u6444\u50cf\u5934", "cameraToggleOff": "\u5173\u95ed\u6444\u50cf\u5934", "cameraToggleStarting": "\u6b63\u5728\u5f00\u542f...", "cameraError": "\u65e0\u6cd5\u8bbf\u95ee\u6444\u50cf\u5934", "aiReady": "AI \u51c6\u5907\u5c31\u7eea", "aiFocused": "\u72b6\u6001\uff1a\u4e13\u6ce8", "aiAway": "\u72b6\u6001\uff1a\u53ef\u80fd\u79bb\u5e2d", "aiNeedCamera": "\u5f00\u542f\u6444\u50cf\u5934\u4ee5\u542f\u7528 AI \u76d1\u7763", "aiUnsupported": "AI \u529f\u80fd\u6682\u4e0d\u652f\u6301\u5f53\u524d\u6d4f\u89c8\u5668", "userListTitle": "\u623f\u95f4\u6210\u5458", "myStatus": "\u6211\u7684\u72b6\u6001", "statusFocus": "\u4e13\u6ce8\u4e2d", "statusBreak": "\u4f11\u606f\u4e2d", "statusStudying": "\u5b66\u4e60\u4e2d", "statusWorking": "\u5de5\u4f5c\u4e2d", "statusMeal": "\u5403\u996d\u4e2d", "statusAway": "\u6682\u65f6\u79bb\u5f00", "statusAutoSync": "\ud83d\udd04 \u8ddf\u968f\u8ba1\u65f6\u5668", "statusShare": "\ud83d\udd12 \u4e0e\u623f\u95f4\u5171\u4eab", "statusCustomPlaceholder": "\u81ea\u5b9a\u4e49\u72b6\u6001...", "ambientSound": "\u73af\u5883\u97f3", "ambientTitle": "\u9009\u62e9\u73af\u5883\u97f3", "ambientShowStatus": "\u540c\u6b65\u5230\u72b6\u6001", "ambientVolume": "\u97f3\u91cf", "soundRain": "\u96e8\u58f0", "soundForest": "\u68ee\u6797", "soundFire": "\u7bdd\u706b", "soundCafe": "\u5496\u5561\u9986", "soundOcean": "\u6d77\u6d6a", "soundNone": "\u5173\u95ed", "soundListening": "\u8046\u542c", "videoCollapsedBanner": "\u6682\u65e0\u89c6\u9891\u6d41", "statusHidden": "\u672a\u5206\u4eab", "userJoined": "\u52a0\u5165\u4e86\u623f\u95f4", "userLeft": "\u79bb\u5f00\u4e86\u623f\u95f4", "focusTodayLabel": "\u4eca\u65e5\u4e13\u6ce8", "focusReset": "\u91cd\u7f6e"}, "en": {"todoTitle": "To-Do List", "chatTitle": "Chat Room", "noiseTitle": "Ambience", "camMe": "My Camera", "camPeer": "Peer Camera", "aiMonitor": "AI Focus Monitor", "focusMode": "Focus Mode", "breakMode": "Break Mode", "todoPlaceholder": "Add task...", "chatPlaceholder": "Type a message...", "timerSet": "Focus", "timerBreak": "Break", "noiseRain": "Rain", "noiseForest": "Forest", "noiseFire": "Fire", "noiseCafe": "Cafe", "joinTitle": "Join the co-study space", "joinSubtitle": "Enter your nickname and room code to start focusing together.", "joinName": "Your nickname", "joinNamePlaceholder": "Name shown to others", "joinRoom": "Room code", "joinRoomPlaceholder": "e.g. ABC123", "joinPassword": "Room password (if required)", "joinPasswordPlaceholder": "Leave empty if no password", "joinButton": "Enter room", "roomLabel": "Room", "onlineLabel": "Online", "presenceEmpty": "Waiting for friends to join...", "chatEmpty": "Messages will appear here", "shareSuccess": "Room link copied!", "shareFallback": "Copy this link and share it", "disconnectMsg": "Connection lost, attempting to reconnect...", "joinNameError": "Please enter a nickname", "serviceError": "Realtime service is unavailable", "connectError": "Connection failed, try again soon", "joinFailed": "Unable to join, please try again", "remoteWaiting": "Waiting for your buddy to enable camera", "remoteOffline": "Peer camera is offline", "cameraToggleOn": "Enable camera", "cameraToggleOff": "Disable camera", "cameraToggleStarting": "Starting...", "cameraError": "Unable to access the camera", "aiReady": "AI ready", "aiFocused": "Status: Focused", "aiAway": "Status: Possibly away", "aiNeedCamera": "Turn on the camera to enable AI monitoring", "aiUnsupported": "AI requires a newer browser", "userListTitle": "Room Members", "myStatus": "My Status", "statusFocus": "Focusing", "statusBreak": "On break", "statusStudying": "Studying", "statusWorking": "Working", "statusMeal": "Meal break", "statusAway": "Away", "statusAutoSync": "\ud83d\udd04 Auto sync with timer", "statusShare": "\ud83d\udd12 Share with room", "statusCustomPlaceholder": "Custom status...", "ambientSound": "Ambient", "ambientTitle": "Choose ambient sound", "ambientShowStatus": "Show in status", "ambientVolume": "Volume", "soundRain": "Rain", "soundForest": "Forest", "soundFire": "Fire", "soundCafe": "Cafe", "soundOcean": "Ocean", "soundNone": "Off", "soundListening": "Listening to", "videoCollapsedBanner": "No video stream", "statusHidden": "Not shared", "userJoined": "joined the room", "userLeft": "left the room", "focusTodayLabel": "Today\'s Focus", "focusReset": "Reset"}}');
     let curLang = 'cn';
 
     const todoList = document.getElementById('todo-list');
@@ -551,6 +553,7 @@
     const joinForm = document.getElementById('join-form');
     const joinNameInput = document.getElementById('join-name');
     const joinRoomInput = document.getElementById('join-room');
+    const joinPasswordInput = document.getElementById('join-password');
     const joinError = document.getElementById('join-error');
     const localVideo = document.getElementById('local-video');
     const remoteGrid = document.getElementById('remote-grid');
@@ -639,6 +642,53 @@
             } catch (_err) {}
         }
         return clientId;
+    }
+
+    // 从 sessionStorage 获取房间密码（由 landing 页面设置）
+    // 或者从加入表单的密码输入框获取
+    function getRoomPassword() {
+        // 首先尝试从表单获取
+        if (joinPasswordInput && joinPasswordInput.value.trim()) {
+            return joinPasswordInput.value.trim();
+        }
+        // 然后尝试从 sessionStorage 获取（不删除，成功后再删除）
+        try {
+            return sessionStorage.getItem('coStudyRoomPassword') || '';
+        } catch (_err) {
+            return '';
+        }
+    }
+
+    // 清除已使用的 sessionStorage 密码
+    function clearStoredPassword() {
+        try {
+            sessionStorage.removeItem('coStudyRoomPassword');
+        } catch (_err) {}
+    }
+
+    // 保存密码到 sessionStorage（用于刷新场景）
+    function storeRoomPassword(value) {
+        try {
+            if (value) {
+                sessionStorage.setItem('coStudyRoomPassword', value);
+            }
+        } catch (_err) {}
+    }
+
+    // 从 sessionStorage 获取房间代码（不删除，成功后再删除）
+    function getStoredRoomCode() {
+        try {
+            return sessionStorage.getItem('coStudyRoomCode') || '';
+        } catch (_err) {
+            return '';
+        }
+    }
+
+    // 清除已使用的 sessionStorage 房间代码
+    function clearStoredRoomCode() {
+        try {
+            sessionStorage.removeItem('coStudyRoomCode');
+        } catch (_err) {}
     }
 
     const DEBUG = true;
@@ -1472,13 +1522,16 @@
             pendingIceCandidates.clear();
             clearRemoteStream();
         });
-        socket.emit('join-room', { roomId, username, clientId: ensureClientId() }, (res) => {
+        socket.emit('join-room', { roomId, username, clientId: ensureClientId(), password: getRoomPassword() }, (res) => {
             if (!res || !res.ok) {
                 setChatEnabled(false);
                 showJoinError((res && res.error) || langDict[curLang].joinFailed);
                 joinOverlay.classList.remove('hidden');
                 return;
             }
+            // 成功加入后保存密码（用于刷新场景）并清除房间代码
+            storeRoomPassword(getRoomPassword());
+            clearStoredRoomCode();
             showJoinError('');
             setChatEnabled(true);
             renderMessages(res.room?.messages || []);
@@ -2233,7 +2286,11 @@
 
     (function initShell(){
         const params = new URLSearchParams(window.location.search);
-        const incomingRoom = (params.get('room') || '').trim().toUpperCase();
+        // 优先从URL获取房间代码，其次从sessionStorage获取
+        let incomingRoom = (params.get('room') || '').trim().toUpperCase();
+        if (!incomingRoom) {
+            incomingRoom = getStoredRoomCode().toUpperCase();
+        }
         if (incomingRoom) {
             roomId = incomingRoom;
             joinRoomInput.value = incomingRoom;

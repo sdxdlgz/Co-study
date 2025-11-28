@@ -6,16 +6,28 @@ A multi-user online study room with video chat, helping you and your friends sta
 
 ## ✨ Features
 
+### Room Management
+- 🏠 **Custom Room Names** - Create rooms with meaningful names like "TOEFL Prep" or "Study Group"
+- 🔐 **Password Protection** - Secure your room with PBKDF2 encrypted passwords
+- 🔗 **Easy Sharing** - Auto-generated 6-digit room codes for quick sharing
+- 🚀 **Landing Page** - Beautiful fullpage scroll landing with create/join options
+
+### Collaboration
 - 🎥 **Multi-user Video Chat** - Real-time video connection via WebRTC, supports multiple users
-- ⏰ **Pomodoro Timer** - Auto-switching between focus/break modes with customizable duration
-- 📊 **Daily Focus Stats** - Track your daily focus time, auto-resets at midnight
-- 📋 **To-Do List** - Priority labels and drag-to-reorder support
-- 💬 **Real-time Chat** - Text chat with room members
+- 💬 **Real-time Chat** - Text chat with room members, join/leave notifications
 - 🔄 **Status Sharing** - Share your studying/working/break status with the room
-- 🎵 **Ambient Sounds** - Rain, forest, fireplace, cafe, ocean waves and more
+
+### Productivity
+- ⏰ **Pomodoro Timer** - Auto-switching between focus/break modes with sound notifications
+- 📊 **Daily Focus Stats** - Track your daily focus time in minutes, auto-resets at midnight
+- 📋 **To-Do List** - Priority labels (high/medium/low) and drag-to-reorder support
+
+### Experience
+- 🎵 **Ambient Sounds** - Rain, forest, fireplace, cafe, ocean waves
 - 🤖 **AI Focus Monitor** - Detects if you're away using browser FaceDetector API
 - 🌍 **Multi-language** - Switch between Chinese/English with one click
 - 🎨 **Theme Customization** - Dark/light mode + 5 color themes
+- 📱 **Responsive Design** - Works on desktop and mobile devices
 
 ## 🚀 Quick Start
 
@@ -29,58 +41,72 @@ cd Co-study
 # Install dependencies
 npm install
 
-# Start HTTP server (for development)
+# Start HTTPS server (required for WebRTC)
 npm start
-
-# Or start HTTPS server (for WebRTC testing)
-npm run https
 ```
 
-Visit `http://localhost:3000` or `https://localhost:3000`
+Visit `https://localhost:3443` (accept the self-signed certificate warning)
 
-> **Note**: WebRTC video features only work on HTTPS or localhost
+> **Note**: WebRTC video features require HTTPS. The server auto-generates a self-signed certificate.
 
 ### VPS Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment guide.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment guide with Nginx + Let's Encrypt.
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: Vanilla JavaScript + HTML5 + CSS3 (no framework)
 - **Backend**: Node.js + Express + Socket.IO
+- **Security**: PBKDF2 password hashing with crypto.timingSafeEqual
 - **Real-time**: WebRTC (Perfect Negotiation) + Socket.IO signaling
+- **HTTPS**: Self-signed certificates via selfsigned package
 - **AI Detection**: Browser FaceDetector API
-- **Process Manager**: PM2
-- **Reverse Proxy**: Nginx
+- **Process Manager**: PM2 (production)
+- **Reverse Proxy**: Nginx (production)
 
 ## 📝 How to Use
 
-1. **Join a Room** - Enter nickname and room code (auto-generated if empty)
-2. **Enable Video** - Click "Enable camera" to video chat with room members
-3. **Focus** - Use Pomodoro timer to track your focus time
-4. **Manage Tasks** - Add to-dos, set priorities, drag to reorder
-5. **Set Status** - Choose preset status or custom, optionally share with room
-6. **Ambient Sound** - Pick your favorite white noise to help focus
+1. **Create or Join** - Visit the landing page, create a new room or join with a code
+2. **Set Password** (optional) - Protect your room with a password
+3. **Share Room Code** - Send the 6-digit code to your study partners
+4. **Enter Room** - Input your nickname to join the study space
+5. **Enable Video** - Click "Enable camera" to video chat with room members
+6. **Focus** - Use Pomodoro timer to track your focus time
+7. **Manage Tasks** - Add to-dos, set priorities, drag to reorder
+8. **Set Status** - Choose preset status or custom, sync with timer
+9. **Ambient Sound** - Pick your favorite white noise to help focus
 
-## 🔒 Privacy
+## 🔒 Privacy & Security
 
 - All video calls are peer-to-peer (P2P), media never passes through server
+- Room passwords are hashed with PBKDF2 (100,000 iterations, SHA-512)
+- Password verification uses timing-safe comparison to prevent timing attacks
 - Server only handles signaling and room state sync
 - Disabling camera makes you invisible to others
 - Local data (settings, stats) stored in browser localStorage
+- Session persistence via cookies for seamless page refreshes
 
 ## 📁 Project Structure
 
 ```
 Co-study/
-├── index.html          # Frontend (single file with HTML/CSS/JS)
-├── server.js           # HTTP server (production)
-├── server-https.js     # HTTPS server (development)
-├── audio/              # Ambient sound files
-├── images/             # Image assets
-├── DEPLOYMENT.md       # Deployment guide
+├── landing.html        # Landing page (fullpage scroll, create/join)
+├── index.html          # Study room page (video, timer, chat, todos)
+├── server.js           # HTTPS server with self-signed cert
+├── server-https.js     # Alternative HTTPS server
+├── audio/              # Ambient sound files (.mp3, .wav)
+├── images/             # Image assets (logo, etc.)
+├── DEPLOYMENT.md       # VPS deployment guide
+├── nginx.conf          # Nginx configuration example
+├── ecosystem.config.js # PM2 configuration
 └── README.md           # This file
 ```
+
+## 🔧 Configuration
+
+Environment variables:
+- `PORT` - HTTP port (default: 3000)
+- `HTTPS_PORT` - HTTPS port (default: 3443)
 
 ## 📄 License
 

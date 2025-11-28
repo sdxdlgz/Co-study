@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Co-Study | 在线协同自习室</title>
+    <link rel="icon" type="image/gif" href="/images/baby-chick_1f424.gif">
+    <style>
+        :root {
+            --bg-body: #F5F2EB;
+            --bg-card: #FFFFFF;
+            --bg-muted: #F8F3ED;
+            --text-main: #2D3436;
+            --text-sec: #636E72;
+            --accent: #E0B08B;
+            --accent-strong: #C28A62;
+            --accent-glow: rgba(224, 176, 139, 0.3);
+            --border: #E2D7C8;
+            --error: #e74c3c;
+            --success: #27ae60;
+            --shadow-soft: 0 40px 80px rgba(45, 52, 54, 0.15);
+            --shadow-light: 0 20px 40px rgba(0, 0, 0, 0.08);
+            --radius-xl: 32px;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #18191A;
+            --bg-card: #242526;
+            --bg-muted: #3A3B3C;
+            --text-main: #E4E6EB;
+            --text-sec: #B0B3B8;
+            --border: #3E4042;
+            --shadow-soft: 0 40px 80px rgba(0, 0, 0, 0.4);
+            --shadow-light: 0 20px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+            background: var(--bg-body);
+            color: var(--text-main);
+            line-height: 1.6;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* 背景装饰 */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(224, 176, 139, 0.12), transparent 50%),
+                radial-gradient(circle at 85% 80%, rgba(116, 185, 255, 0.08), transparent 45%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* 全屏滚动容器 */
+        .fullpage-container {
+            height: 100vh;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1);
+            will-change: transform;
+        }
+
+        .page-section {
+            height: 100vh;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px clamp(20px, 5vw, 80px);
+            position: relative;
+        }
+
+        /* 页面指示器 */
+        .page-indicator {
+            position: fixed;
+            right: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .indicator-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 0;
+        }
+
+        .indicator-dot:hover {
+            background: var(--accent);
+            transform: scale(1.2);
+        }
+
+        .indicator-dot.active {
+            background: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* 顶部工具栏 */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 16px clamp(20px, 5vw, 60px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            background: linear-gradient(to bottom, var(--bg-body), transparent);
+        }
+
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo img {
+            height: 1.5em;
+        }
+
+        .top-tools {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-main);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            transition: all 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .lang-switch {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-card);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+        }
+
+        .lang-switch span {
+            opacity: 0.4;
+            transition: opacity 0.2s;
+        }
+
+        .lang-switch span.active {
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        /* ===== 第一屏：欢迎页 ===== */
+        .hero-section {
+            display: flex;
+            gap: 60px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding-left: 40px;
+        }
+
+        .hero-content {
+            flex: 1;
+            max-width: 600px;
+        }
+
+        .hero-eyebrow {
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            font-size: 0.75rem;
+            color: var(--accent-strong);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .hero-title {
+            font-size: clamp(2.2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            line-height: 1.15;
+            margin-bottom: 20px;
+        }
+
+        .hero-title span {
+            color: var(--accent-strong);
+        }
+
+        .hero-desc {
+            font-size: 1.05rem;
+            color: var(--text-sec);
+            margin-bottom: 28px;
+            line-height: 1.7;
+        }
+
+        .hero-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 32px;
+        }
+
+        .feature-tag {
+            padding: 8px 16px;
+            border-radius: 999px;
+            background: rgba(224, 176, 139, 0.15);
+            color: var(--accent-strong);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .btn-primary {
+            padding: 14px 28px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: var(--shadow-light);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .btn-secondary {
+            padding: 14px 28px;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .hero-hint {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: var(--text-sec);
+        }
+
+        .hero-visual {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 420px;
+            position: relative;
+            padding-top: 30px;
+            padding-left: 20px;
+        }
+
+        .preview-card {
+            padding: 24px;
+            border-radius: var(--radius-lg);
+            background: var(--bg-card);
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .preview-card:hover::before {
+            opacity: 1;
+        }
+
+        .preview-card.accent {
+            background: linear-gradient(145deg, #f9e2cf, #f0c6a1);
+            color: #5b3516;
+            border: none;
+        }
+
+        .preview-card.gradient-blue {
+            background: linear-gradient(145deg, #d4e6f7, #a8d4f0);
+            color: #1a4568;
+            border: none;
+        }
+
+        .preview-card.gradient-purple {
+            background: linear-gradient(145deg, #e8dff5, #d4c4eb);
+            color: #4a3568;
+            border: none;
+        }
+
+        .preview-card p {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .preview-card strong {
+            display: block;
+            font-size: 1.15rem;
+            margin-top: 8px;
+        }
+
+        .preview-card .card-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .preview-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .preview-row .preview-card {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .stats-display {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .stats-display .number {
+            font-size: 2rem;
+            font-weight: 800;
+            color: inherit;
+        }
+
+        .stats-display .label {
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        .floating-badge {
+            position: absolute;
+            background: var(--bg-card);
+            padding: 10px 16px;
+            border-radius: 999px;
+            box-shadow: var(--shadow-light);
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: float 3s ease-in-out infinite;
+            border: 1px solid var(--border);
+        }
+
+        .floating-badge.badge-1 {
+            top: 0;
+            right: -10px;
+            animation-delay: 0s;
+        }
+
+        .floating-badge.badge-2 {
+            bottom: 60px;
+            left: -10px;
+            animation-delay: 1.5s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .decorative-dots {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            opacity: 0.3;
+        }
+
+        .decorative-dots.dots-1 {
+            top: -40px;
+            left: -20px;
+            background: radial-gradient(circle, var(--accent) 2px, transparent 2px);
+            background-size: 12px 12px;
+        }
+
+        .decorative-dots.dots-2 {
+            bottom: -30px;
+            right: -10px;
+            background: radial-gradient(circle, var(--accent) 2px, transparent 2px);
+            background-size: 10px 10px;
+        }
+
+        /* ===== 第二屏：合并选择+表单页 ===== */
+        .combined-section {
+            display: flex;
+            flex-direction: row;
+            max-width: 1100px;
+            width: 100%;
+            gap: 50px;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .combined-section::before {
+            content: '';
+            position: absolute;
+            top: 20%;
+            left: -10%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .combined-left {
+            flex: 0 0 380px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .combined-right {
+            flex: 1;
+            max-width: 520px;
+        }
+
+        .section-header {
+            text-align: left;
+            margin-bottom: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-header h2 {
+            font-size: clamp(1.6rem, 3vw, 2.2rem);
+            margin-bottom: 8px;
+        }
+
+        .section-header p {
+            color: var(--text-sec);
+            font-size: 0.95rem;
+        }
+
+        .choice-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .choice-card {
+            padding: 20px 24px;
+            border-radius: var(--radius-lg);
+            background: var(--bg-card);
+            border: 2px solid transparent;
+            box-shadow: var(--shadow-light);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .choice-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--accent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .choice-card:hover::before,
+        .choice-card.active::before {
+            opacity: 1;
+        }
+
+        .choice-card:hover {
+            transform: translateX(4px);
+            border-color: var(--accent);
+        }
+
+        .choice-card.active {
+            border-color: var(--accent);
+            background: rgba(224, 176, 139, 0.08);
+        }
+
+        .choice-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(224, 176, 139, 0.3), rgba(224, 176, 139, 0.1));
+            color: var(--accent-strong);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .choice-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .choice-card h3 {
+            font-size: 1.1rem;
+            margin: 0 0 4px 0;
+        }
+
+        .choice-card p {
+            color: var(--text-sec);
+            font-size: 0.85rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        .features-highlight {
+            margin-top: 28px;
+            padding: 20px;
+            background: var(--bg-muted);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--border);
+        }
+
+        .feature-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .feature-item:first-child {
+            padding-top: 0;
+        }
+
+        .feature-icon {
+            font-size: 1.2rem;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(224, 176, 139, 0.15);
+            border-radius: 8px;
+        }
+
+        .feature-text {
+            font-size: 0.9rem;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .form-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border);
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .form-card[hidden] {
+            display: none;
+        }
+
+        .form-title {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+        }
+
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--bg-muted);
+            font-size: 1rem;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: var(--bg-card);
+        }
+
+        .input-group input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .checkbox-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .checkbox-line input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+        }
+
+        .checkbox-line label {
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .form-note {
+            font-size: 0.85rem;
+            color: var(--text-sec);
+            margin-bottom: 18px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .form-feedback {
+            min-height: 24px;
+            font-size: 0.9rem;
+            margin-top: 16px;
+        }
+
+        .form-feedback.error {
+            color: var(--error);
+        }
+
+        .form-feedback.success {
+            color: var(--success);
+        }
+
+        .result-box {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: var(--radius-md);
+            background: rgba(224, 176, 139, 0.1);
+            border: 1px dashed var(--accent);
+        }
+
+        .result-box[hidden] {
+            display: none;
+        }
+
+        .result-code {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--accent-strong);
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .result-box p {
+            color: var(--text-sec);
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 900px) {
+            .hero-section {
+                flex-direction: column;
+                gap: 40px;
+            }
+
+            .hero-visual {
+                max-width: 100%;
+                flex-direction: column;
+                padding-top: 10px;
+                padding-left: 0;
+            }
+
+            .preview-row {
+                flex-direction: row;
+            }
+
+            .preview-row .preview-card {
+                min-width: 140px;
+            }
+
+            .decorative-dots {
+                display: none;
+            }
+
+            .combined-section {
+                flex-direction: column;
+                gap: 30px;
+            }
+
+            .combined-left {
+                flex: none;
+                width: 100%;
+            }
+
+            .combined-right {
+                max-width: 100%;
+            }
+
+            .section-header {
+                text-align: center;
+            }
+
+            .choice-stack {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .choice-card {
+                flex: 1;
+                min-width: 200px;
+            }
+
+            .combined-section::before {
+                display: none;
+            }
+
+            .features-highlight {
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 16px;
+                justify-content: center;
+            }
+
+            .feature-item {
+                flex: 0 1 auto;
+                padding: 8px 16px;
+                border-bottom: none;
+                background: var(--bg-card);
+                border-radius: 999px;
+                border: 1px solid var(--border);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .page-section {
+                padding: 80px 20px 40px;
+            }
+
+            .page-indicator {
+                right: 12px;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+            }
+
+            .form-card {
+                padding: 24px;
+            }
+
+            .preview-row {
+                flex-direction: column;
+            }
+
+            .preview-row .preview-card {
+                min-width: auto;
+            }
+
+            .stats-display .number {
+                font-size: 1.5rem;
+            }
+
+            .choice-stack {
+                flex-direction: column;
+            }
+
+            .choice-card {
+                min-width: auto;
+            }
+        }
+
+        /* 减少动画偏好 */
+        @media (prefers-reduced-motion: reduce) {
+            .fullpage-container {
+                transition-duration: 0.2s;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部工具栏 -->
+    <div class="top-bar">
+        <div class="logo">
+            <img src="/images/baby-chick_1f424.gif" alt="Logo">
+            Co-Study
+        </div>
+        <div class="top-tools">
+            <div class="lang-switch" id="lang-switch">
+                <span class="active" id="lang-cn">CN</span>
+                <span>/</span>
+                <span id="lang-en">EN</span>
+            </div>
+            <button class="icon-btn" id="theme-toggle" title="切换主题">🌙</button>
+        </div>
+    </div>
+
+    <!-- 页面指示器 -->
+    <div class="page-indicator">
+        <button class="indicator-dot active" data-page="0" aria-label="第1页"></button>
+        <button class="indicator-dot" data-page="1" aria-label="第2页"></button>
+    </div>
+
+    <!-- 全屏滚动容器 -->
+    <div class="fullpage-container" id="fullpage">
+        <!-- 第一屏：欢迎页 -->
+        <section class="page-section" data-page="0">
+            <div class="hero-section">
+                <div class="hero-content">
+                    <p class="hero-eyebrow" data-lang="heroEyebrow">COLLABORATIVE STUDY SPACE</p>
+                    <h1 class="hero-title">
+                        <span data-lang="heroTitleWelcome">欢迎来到</span>
+                        <span>Co-Study</span>
+                    </h1>
+                    <p class="hero-desc" data-lang="heroDesc">
+                        创建专属自习室，邀请伙伴一起专注学习。支持房间命名、密码保护，让你的学习空间更加私密和个性化。
+                    </p>
+                    <div class="hero-features">
+                        <span class="feature-tag" data-lang="featureVideo">视频连线</span>
+                        <span class="feature-tag" data-lang="featureTimer">番茄钟</span>
+                        <span class="feature-tag" data-lang="featureChat">实时聊天</span>
+                        <span class="feature-tag" data-lang="featurePassword">密码保护</span>
+                    </div>
+                    <div class="hero-actions">
+                        <button class="btn-primary" id="btn-scroll-down" data-lang="btnStart">开始使用</button>
+                        <button class="btn-secondary" id="btn-skip-to-form" data-lang="btnQuickJoin">快速加入</button>
+                    </div>
+                    <p class="hero-hint" data-lang="heroHint">使用滚轮、方向键或触摸滑动浏览</p>
+                </div>
+                <div class="hero-visual">
+                    <!-- 装饰性点阵 -->
+                    <div class="decorative-dots dots-1"></div>
+                    <div class="decorative-dots dots-2"></div>
+
+
+                    <!-- 主卡片 -->
+                    <div class="preview-card accent">
+                        <div class="card-icon">📚</div>
+                        <p data-lang="previewNew">NEW FEATURE</p>
+                        <strong data-lang="previewTitle1">自定义房间名称</strong>
+                    </div>
+
+                    <!-- 双卡片行 -->
+                    <div class="preview-row">
+                        <div class="preview-card gradient-blue">
+                            <p data-lang="previewTimer">POMODORO</p>
+                            <div class="stats-display">
+                                <span class="number">25</span>
+                                <span class="label" data-lang="previewMinutes">分钟</span>
+                            </div>
+                        </div>
+                        <div class="preview-card gradient-purple">
+                            <p data-lang="previewFocus">FOCUS</p>
+                            <div class="stats-display">
+                                <span class="number">∞</span>
+                                <span class="label" data-lang="previewUsers">人数</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部卡片 -->
+                    <div class="preview-card">
+                        <p data-lang="previewSecure">SECURE</p>
+                        <strong data-lang="previewTitle2">可选密码保护</strong>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 第二屏：选择+表单合并页 -->
+        <section class="page-section combined-section" data-page="1">
+            <!-- 左侧：选择卡片 -->
+            <div class="combined-left">
+                <div class="section-header">
+                    <h2 data-lang="chooserTitle">选择你的方式</h2>
+                    <p data-lang="chooserDesc">创建全新自习室或加入已有房间，开始你的专注之旅</p>
+                </div>
+                <div class="choice-stack">
+                    <article class="choice-card active" data-choice="create" tabindex="0" role="button">
+                        <div class="choice-icon">✦</div>
+                        <div class="choice-text">
+                            <h3 data-lang="createTitle">新建自习室</h3>
+                            <p data-lang="createDesc">创建一个属于你的学习空间，自定义名称并设置访问权限</p>
+                        </div>
+                    </article>
+                    <article class="choice-card" data-choice="join" tabindex="0" role="button">
+                        <div class="choice-icon">➤</div>
+                        <div class="choice-text">
+                            <h3 data-lang="joinTitle">加入自习室</h3>
+                            <p data-lang="joinDesc">已有房间代码？输入后即可加入伙伴的学习空间</p>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- 功能亮点 -->
+                <div class="features-highlight">
+                    <div class="feature-item">
+                        <span class="feature-icon">🔒</span>
+                        <span class="feature-text" data-lang="featureSecure">端到端加密传输</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">⚡</span>
+                        <span class="feature-text" data-lang="featureRealtime">实时音视频同步</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">🌍</span>
+                        <span class="feature-text" data-lang="featureGlobal">支持全球访问</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：表单区域 -->
+            <div class="combined-right">
+                <!-- 创建表单 -->
+                <form class="form-card" id="create-form" autocomplete="off">
+                    <h3 class="form-title">📚 <span data-lang="createFormTitle">新建自习室</span></h3>
+                    <div class="input-group">
+                        <label for="room-name" data-lang="labelRoomName">房间名称</label>
+                        <input type="text" id="room-name" name="roomName" maxlength="48"
+                               data-lang-placeholder="placeholderRoomName" placeholder="例如：英语角、考研小组" required>
+                    </div>
+                    <div class="checkbox-line">
+                        <input type="checkbox" id="require-password">
+                        <label for="require-password" data-lang="labelRequirePassword">需要密码保护</label>
+                    </div>
+                    <div class="input-group">
+                        <label for="room-password" data-lang="labelPassword">访问密码</label>
+                        <input type="password" id="room-password" name="roomPassword" maxlength="64"
+                               data-lang-placeholder="placeholderPassword" placeholder="设置4-64位密码" disabled>
+                    </div>
+                    <p class="form-note" data-lang="notePassword">密码会被安全加密存储，只有知道密码的人才能加入</p>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" data-lang="btnCreateRoom">创建自习室</button>
+                    </div>
+                    <p class="form-feedback" id="create-feedback"></p>
+                    <div class="result-box" id="create-result" hidden>
+                        <div class="result-code" id="result-code"></div>
+                        <p data-lang="resultDesc">分享这个代码给你的伙伴，邀请他们加入</p>
+                        <button type="button" class="btn-primary" id="btn-enter-room" data-lang="btnEnterRoom">进入自习室</button>
+                    </div>
+                </form>
+
+                <!-- 加入表单 -->
+                <form class="form-card" id="join-form" hidden autocomplete="off">
+                    <h3 class="form-title">🚀 <span data-lang="joinFormTitle">加入自习室</span></h3>
+                    <div class="input-group">
+                        <label for="join-code" data-lang="labelJoinCode">房间代码</label>
+                        <input type="text" id="join-code" name="roomCode" maxlength="10"
+                               data-lang-placeholder="placeholderJoinCode" placeholder="例如：ABC123" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="join-password" data-lang="labelJoinPassword">房间密码（如需要）</label>
+                        <input type="password" id="join-password" name="roomPassword" maxlength="64"
+                               data-lang-placeholder="placeholderJoinPassword" placeholder="如果房间有密码请填写">
+                    </div>
+                    <p class="form-note" data-lang="noteJoin">提交后会跳转到自习室，届时需要输入你的昵称</p>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" data-lang="btnJoinRoom">加入自习室</button>
+                    </div>
+                    <p class="form-feedback" id="join-feedback"></p>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        // ===== 语言配置 =====
+        const langDict = {
+            cn: {
+                heroEyebrow: '协同学习空间',
+                heroTitleWelcome: '欢迎来到',
+                heroDesc: '创建专属自习室，邀请伙伴一起专注学习。支持房间命名、密码保护，让你的学习空间更加私密和个性化。',
+                featureVideo: '视频连线',
+                featureTimer: '番茄钟',
+                featureChat: '实时聊天',
+                featurePassword: '密码保护',
+                btnStart: '开始使用',
+                btnQuickJoin: '快速加入',
+                heroHint: '使用滚轮、方向键或触摸滑动浏览',
+                previewNew: '新功能',
+                previewSecure: '安全',
+                previewTitle1: '自定义房间名称',
+                previewTitle2: '可选密码保护',
+                previewTimer: '番茄钟',
+                previewMinutes: '分钟',
+                previewFocus: '专注',
+                previewUsers: '人数',
+                badgeSecure: '安全加密',
+                badgeRealtime: '实时同步',
+                chooserTitle: '选择你的方式',
+                chooserDesc: '创建全新自习室或加入已有房间，开始你的专注之旅',
+                createTitle: '新建自习室',
+                createDesc: '创建一个属于你的学习空间，自定义名称并设置访问权限',
+                createFeature1: '自定义房间名称',
+                createFeature2: '可选密码保护',
+                createFeature3: '生成分享代码',
+                joinTitle: '加入自习室',
+                joinDesc: '已有房间代码？输入后即可加入伙伴的学习空间',
+                joinFeature1: '输入房间代码',
+                joinFeature2: '填写访问密码',
+                joinFeature3: '即刻开始学习',
+                formTitleCreate: '创建新自习室',
+                formTitleJoin: '加入自习室',
+                modeCreate: '新建',
+                modeJoin: '加入',
+                createFormTitle: '新建自习室',
+                labelRoomName: '房间名称',
+                placeholderRoomName: '例如：英语角、考研小组',
+                labelRequirePassword: '需要密码保护',
+                labelPassword: '访问密码',
+                placeholderPassword: '设置4-64位密码',
+                notePassword: '密码会被安全加密存储，只有知道密码的人才能加入',
+                btnCreateRoom: '创建自习室',
+                resultDesc: '分享这个代码给你的伙伴，邀请他们加入',
+                btnEnterRoom: '进入自习室',
+                joinFormTitle: '加入自习室',
+                labelJoinCode: '房间代码',
+                placeholderJoinCode: '例如：ABC123',
+                labelJoinPassword: '房间密码（如需要）',
+                placeholderJoinPassword: '如果房间有密码请填写',
+                noteJoin: '提交后会跳转到自习室，届时需要输入你的昵称',
+                btnJoinRoom: '加入自习室',
+                errorNoName: '请输入房间名称',
+                errorNoCode: '请输入房间代码',
+                errorCreating: '正在创建...',
+                errorCreateFailed: '创建失败，请稍后重试',
+                successCreated: '房间已创建！',
+                redirecting: '正在跳转...',
+                visualFocusTitle: '专注学习',
+                visualFocusDesc: '与伙伴一起保持专注，互相监督，共同进步',
+                visualTimerTitle: '番茄工作法',
+                visualTimerDesc: '内置番茄钟，科学安排学习与休息时间',
+                visualChatTitle: '实时互动',
+                visualChatDesc: '文字聊天与视频连线，随时交流学习心得',
+                tipNameTitle: '房间名称建议',
+                tipNameDesc: '使用有意义的名称，如"考研英语组"、"周末自习"，方便伙伴识别',
+                tipPasswordTitle: '密码保护',
+                tipPasswordDesc: '设置密码可防止陌生人进入，密码采用安全加密存储',
+                tipShareTitle: '分享房间',
+                tipShareDesc: '创建后会生成6位房间代码，将代码和密码分享给伙伴即可',
+                securityBadge: '数据安全加密传输',
+                featureSecure: '端到端加密传输',
+                featureRealtime: '实时音视频同步',
+                featureGlobal: '支持全球访问'
+            },
+            en: {
+                heroEyebrow: 'COLLABORATIVE STUDY SPACE',
+                heroTitleWelcome: 'Welcome to',
+                heroDesc: 'Create your own study room, invite friends to focus together. Supports custom room names and password protection for a private, personalized learning space.',
+                featureVideo: 'Video Chat',
+                featureTimer: 'Pomodoro',
+                featureChat: 'Live Chat',
+                featurePassword: 'Password',
+                btnStart: 'Get Started',
+                btnQuickJoin: 'Quick Join',
+                heroHint: 'Scroll, use arrow keys, or swipe to navigate',
+                previewNew: 'NEW FEATURE',
+                previewSecure: 'SECURE',
+                previewTitle1: 'Custom Room Names',
+                previewTitle2: 'Optional Password',
+                previewTimer: 'POMODORO',
+                previewMinutes: 'min',
+                previewFocus: 'FOCUS',
+                previewUsers: 'users',
+                badgeSecure: 'Encrypted',
+                badgeRealtime: 'Real-time',
+                chooserTitle: 'Choose Your Way',
+                chooserDesc: 'Create a new study room or join an existing one to start your focus journey',
+                createTitle: 'Create Room',
+                createDesc: 'Create your own study space with a custom name and access control',
+                createFeature1: 'Custom room name',
+                createFeature2: 'Optional password',
+                createFeature3: 'Shareable code',
+                joinTitle: 'Join Room',
+                joinDesc: "Have a room code? Enter it to join your friend's study space",
+                joinFeature1: 'Enter room code',
+                joinFeature2: 'Provide password',
+                joinFeature3: 'Start studying',
+                formTitleCreate: 'Create New Room',
+                formTitleJoin: 'Join Room',
+                modeCreate: 'Create',
+                modeJoin: 'Join',
+                createFormTitle: 'New Study Room',
+                labelRoomName: 'Room Name',
+                placeholderRoomName: 'e.g., English Corner, Study Group',
+                labelRequirePassword: 'Require password',
+                labelPassword: 'Access Password',
+                placeholderPassword: 'Set 4-64 character password',
+                notePassword: 'Password is securely encrypted. Only those with the password can join.',
+                btnCreateRoom: 'Create Room',
+                resultDesc: 'Share this code with your friends to invite them',
+                btnEnterRoom: 'Enter Room',
+                joinFormTitle: 'Join Study Room',
+                labelJoinCode: 'Room Code',
+                placeholderJoinCode: 'e.g., ABC123',
+                labelJoinPassword: 'Room Password (if required)',
+                placeholderJoinPassword: 'Enter password if room is protected',
+                noteJoin: "After submitting, you'll enter the room and set your nickname",
+                btnJoinRoom: 'Join Room',
+                errorNoName: 'Please enter a room name',
+                errorNoCode: 'Please enter a room code',
+                errorCreating: 'Creating...',
+                errorCreateFailed: 'Failed to create room. Please try again.',
+                successCreated: 'Room created!',
+                redirecting: 'Redirecting...',
+                visualFocusTitle: 'Focus Together',
+                visualFocusDesc: 'Stay focused with your study partners, motivate each other',
+                visualTimerTitle: 'Pomodoro Timer',
+                visualTimerDesc: 'Built-in timer for balanced study and break sessions',
+                visualChatTitle: 'Real-time Chat',
+                visualChatDesc: 'Text chat and video calls for instant communication',
+                tipNameTitle: 'Naming Tips',
+                tipNameDesc: 'Use meaningful names like "TOEFL Prep" or "Weekend Study" for easy recognition',
+                tipPasswordTitle: 'Password Protection',
+                tipPasswordDesc: 'Set a password to keep strangers out. Passwords are securely encrypted.',
+                tipShareTitle: 'Share Your Room',
+                tipShareDesc: 'Get a 6-digit code after creation. Share it with friends to invite them.',
+                securityBadge: 'Secure & Encrypted',
+                featureSecure: 'End-to-end Encryption',
+                featureRealtime: 'Real-time A/V Sync',
+                featureGlobal: 'Global Access'
+            }
+        };
+
+        let currentLang = 'cn';
+        let currentPage = 0;
+        let currentMode = 'create';
+        let isScrolling = false;
+        let touchStartY = 0;
+        let createdRoomCode = '';
+        let createdRoomPassword = '';
+
+        const totalPages = 2;
+        const container = document.getElementById('fullpage');
+        const dots = document.querySelectorAll('.indicator-dot');
+        const choiceCards = document.querySelectorAll('[data-choice]');
+        const createForm = document.getElementById('create-form');
+        const joinForm = document.getElementById('join-form');
+        const requirePasswordCheckbox = document.getElementById('require-password');
+        const roomPasswordInput = document.getElementById('room-password');
+        const joinCodeInput = document.getElementById('join-code');
+
+        // Socket 连接
+        let socket = null;
+        if (window.io) {
+            socket = io();
+        }
+
+        // ===== 语言切换 =====
+        function applyLanguage() {
+            document.getElementById('lang-cn').className = currentLang === 'cn' ? 'active' : '';
+            document.getElementById('lang-en').className = currentLang === 'en' ? 'active' : '';
+
+            document.querySelectorAll('[data-lang]').forEach(el => {
+                const key = el.dataset.lang;
+                if (langDict[currentLang][key]) {
+                    el.textContent = langDict[currentLang][key];
+                }
+            });
+
+            document.querySelectorAll('[data-lang-placeholder]').forEach(el => {
+                const key = el.dataset.langPlaceholder;
+                if (langDict[currentLang][key]) {
+                    el.placeholder = langDict[currentLang][key];
+                }
+            });
+        }
+
+        document.getElementById('lang-switch').addEventListener('click', () => {
+            currentLang = currentLang === 'cn' ? 'en' : 'cn';
+            applyLanguage();
+        });
+
+        // ===== 主题切换 =====
+        let isDark = false;
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            isDark = !isDark;
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        });
+
+        // ===== 页面滚动 =====
+        function goToPage(index) {
+            if (index < 0 || index >= totalPages || isScrolling || index === currentPage) return;
+
+            isScrolling = true;
+            currentPage = index;
+            container.style.transform = `translateY(-${currentPage * 100}vh)`;
+
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentPage);
+            });
+
+            setTimeout(() => {
+                isScrolling = false;
+            }, 850);
+        }
+
+        function goNext() {
+            goToPage(Math.min(totalPages - 1, currentPage + 1));
+        }
+
+        function goPrev() {
+            goToPage(Math.max(0, currentPage - 1));
+        }
+
+        // 检查是否在输入框中
+        function isTyping(target) {
+            return target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        }
+
+        // 滚轮事件
+        window.addEventListener('wheel', (e) => {
+            if (isTyping(e.target)) return;
+            if (Math.abs(e.deltaY) < 20) return;
+            e.preventDefault();
+            if (e.deltaY > 0) goNext();
+            else goPrev();
+        }, { passive: false });
+
+        // 键盘事件
+        window.addEventListener('keydown', (e) => {
+            if (isTyping(e.target)) return;
+            switch (e.key) {
+                case 'ArrowDown':
+                case 'PageDown':
+                case ' ':
+                    e.preventDefault();
+                    goNext();
+                    break;
+                case 'ArrowUp':
+                case 'PageUp':
+                    e.preventDefault();
+                    goPrev();
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    goToPage(0);
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    goToPage(totalPages - 1);
+                    break;
+            }
+        });
+
+        // 触摸事件
+        window.addEventListener('touchstart', (e) => {
+            if (isTyping(e.target)) return;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            if (touchStartY === 0) return;
+            const deltaY = e.changedTouches[0].clientY - touchStartY;
+            if (Math.abs(deltaY) > 60) {
+                if (deltaY < 0) goNext();
+                else goPrev();
+            }
+            touchStartY = 0;
+        }, { passive: true });
+
+        // 点击指示器
+        dots.forEach(dot => {
+            dot.addEventListener('click', () => {
+                goToPage(parseInt(dot.dataset.page, 10));
+            });
+        });
+
+        // 按钮导航
+        document.getElementById('btn-scroll-down').addEventListener('click', goNext);
+        document.getElementById('btn-skip-to-form').addEventListener('click', () => {
+            setMode('join');
+            goToPage(1);
+        });
+
+        // ===== 选择模式 =====
+        function setMode(mode) {
+            currentMode = mode;
+
+            choiceCards.forEach(card => {
+                card.classList.toggle('active', card.dataset.choice === mode);
+            });
+
+            if (mode === 'create') {
+                createForm.hidden = false;
+                joinForm.hidden = true;
+            } else {
+                createForm.hidden = true;
+                joinForm.hidden = false;
+            }
+        }
+
+        choiceCards.forEach(card => {
+            card.addEventListener('click', () => {
+                setMode(card.dataset.choice);
+            });
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    card.click();
+                }
+            });
+        });
+
+        // ===== 密码复选框 =====
+        requirePasswordCheckbox.addEventListener('change', () => {
+            const enabled = requirePasswordCheckbox.checked;
+            roomPasswordInput.disabled = !enabled;
+            if (!enabled) {
+                roomPasswordInput.value = '';
+            }
+        });
+
+        // 房间代码输入格式化
+        joinCodeInput.addEventListener('input', () => {
+            joinCodeInput.value = joinCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+        });
+
+        // ===== 创建房间表单 =====
+        createForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const feedback = document.getElementById('create-feedback');
+            const result = document.getElementById('create-result');
+            const roomNameInput = document.getElementById('room-name');
+            const roomName = roomNameInput.value.trim();
+            const password = roomPasswordInput.value.trim();
+            const requirePassword = requirePasswordCheckbox.checked && password.length > 0;
+
+            if (!roomName) {
+                feedback.textContent = langDict[currentLang].errorNoName;
+                feedback.className = 'form-feedback error';
+                roomNameInput.focus();
+                return;
+            }
+
+            feedback.textContent = langDict[currentLang].errorCreating;
+            feedback.className = 'form-feedback';
+
+            if (!socket) {
+                feedback.textContent = langDict[currentLang].errorCreateFailed;
+                feedback.className = 'form-feedback error';
+                return;
+            }
+
+            socket.emit('create-room', {
+                roomName,
+                password,
+                requirePassword
+            }, (response) => {
+                if (!response || !response.ok) {
+                    feedback.textContent = response?.error || langDict[currentLang].errorCreateFailed;
+                    feedback.className = 'form-feedback error';
+                    return;
+                }
+
+                createdRoomCode = response.room.roomId || response.room.code;
+                createdRoomPassword = requirePassword ? password : '';
+
+                feedback.textContent = langDict[currentLang].successCreated;
+                feedback.className = 'form-feedback success';
+
+                document.getElementById('result-code').textContent = createdRoomCode;
+                result.hidden = false;
+            });
+        });
+
+        // 进入房间按钮
+        document.getElementById('btn-enter-room').addEventListener('click', () => {
+            if (!createdRoomCode) return;
+            sessionStorage.setItem('coStudyRoomCode', createdRoomCode);
+            if (createdRoomPassword) {
+                sessionStorage.setItem('coStudyRoomPassword', createdRoomPassword);
+            } else {
+                sessionStorage.removeItem('coStudyRoomPassword');
+            }
+            window.location.href = `/index.html?room=${encodeURIComponent(createdRoomCode)}`;
+        });
+
+        // ===== 加入房间表单 =====
+        joinForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const feedback = document.getElementById('join-feedback');
+            const code = joinCodeInput.value.trim().toUpperCase();
+            const password = document.getElementById('join-password').value.trim();
+
+            if (!code) {
+                feedback.textContent = langDict[currentLang].errorNoCode;
+                feedback.className = 'form-feedback error';
+                joinCodeInput.focus();
+                return;
+            }
+
+            sessionStorage.setItem('coStudyRoomCode', code);
+            if (password) {
+                sessionStorage.setItem('coStudyRoomPassword', password);
+            } else {
+                sessionStorage.removeItem('coStudyRoomPassword');
+            }
+
+            feedback.textContent = langDict[currentLang].redirecting;
+            feedback.className = 'form-feedback';
+
+            window.location.href = `/index.html?room=${encodeURIComponent(code)}`;
+        });
+
+        // 从 URL 读取房间代码
+        function checkUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const roomCode = params.get('room');
+            if (roomCode) {
+                joinCodeInput.value = roomCode.toUpperCase();
+                setMode('join');
+                goToPage(1);
+            }
+        }
+
+        // 初始化
+        applyLanguage();
+        checkUrlParams();
+    })();
+    </script>
+</body>
+</html>
